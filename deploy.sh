@@ -14,12 +14,12 @@ check_deploy_env(){
 main(){
     case "$1" in
         package)
-            PACKAGE_DIR=packages
-            PACKAGE_NAME=`TZ='America/New York' date +%F_%H-%M-%S`.tar.gz
-            PACKAGE_PATH=$PACKAGE_DIR/$PACKAGE_NAME
-            [ ! -d ./packages ] && mkdir $PACKAGE_DIR
-            tar zvc ./deploy.sh ./imods ./uwsgi.ini ./requirements.txt -f "${2-$PACKAGE_PATH}"
-            echo ${2-$PACKAGE_PATH}
+            BUILD_DIR=builds
+            BUILD_NAME=`TZ='America/New York' date +%F_%H-%M-%S`.tar.gz
+            BUILD_PATH=$BUILD_DIR/$BUILD_NAME
+            [ ! -d ./packages ] && mkdir $BUILD_DIR
+            tar zvc ./deploy.sh ./imods ./uwsgi.ini ./requirements.txt -f "${2-$BUILD_PATH}"
+            echo ${2-$BUILD_PATH}
             ;;
         unpackage)
             if [ -z "$2" ];then
