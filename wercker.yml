@@ -69,7 +69,7 @@ deploy:
 
         - script:
             name: cleanning remote environment
-            code: ssh -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH 'rm -rf ~/app/*'
+            code: ssh -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'rm -rf ~/app/*'
 
         - script:
             name: unpacking application
