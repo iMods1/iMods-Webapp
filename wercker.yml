@@ -57,10 +57,10 @@ deploy:
             name: transfer application
             code: |
                 echo PWD=$PWD
-                echo ================================================
+                ############################################
                 ls -al
-                echo ================================================
-                scp -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $PACKAGE_PATH $SSH_HOSTNAME
+                ############################################
+                scp -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $PACKAGE_PATH $SSH_HOSTNAME:~/
 
         - script:
             name: stopping application
