@@ -25,43 +25,28 @@ deploy:
             envvar: PRIVATEKEY_PATH
         - mktemp:
             envvar: SSH_CONFIG_PATH
+
         - mktemp:
-            envvar: DEPLOY_TARBALL_PATH
+            envvar: PACKAGE_PATH
+
         - create-file:
             name: write private key
             filename: $PRIVATEKEY_PATH
             content: $DEPLOY_PRIVATE
             overwrite: true
             hide-from-log: true
+
         - create-file:
             name: create temporary ssh config
             filename: $SSH_CONFIG_PATH
             content: $SSH_CONFIG_CONTENT
             overwrite: true
             hide-from-log: true
-        #- script:
-            #name: init environment variables
-            #code: |
-                #echo = PRIVATEKEY_PATH:
-                #echo $PRIVATEKEY_PATH
-                #echo = SSH_CONFIG_PATH:
-                #echo $SSH_CONFIG_PATH
-                #echo = SSH_HOSTNAME:
-                #echo $SSH_HOSTNAME
-                #echo = SSH_STOP_APP_CMD:
-                #echo $SSH_STOP_APP_CMD
-                #echo = SSH_START_APP_CMD:
-                #echo $SSH_START_APP_CMD
-                #echo = DEPLOY_TARBALL_PATH:
-                #echo $DEPLOY_TARBALL_PATH
-                #echo = DEPLOY_REMOTE_DIR:
-                #echo $DEPLOY_REMOTE_DIR
-                #echo = DEPLOY_PACKAGE_DIR:
-                #echo $DEPLOY_PACKAGE_DIR
 
         - script:
             name: packaging application
-            code: tar zcv $WERCKER_SOURCE_DIR/* -f $DEPLOY_TARBALL_PATH
+            code: |
+                PWD=$WERCKER_SOURCE_DIR $WERCKER_SOURCE_DIR/deploy.sh package $PACKAGE_PATH
 
         - script:
             name: transfer application
@@ -74,7 +59,7 @@ deploy:
 
         - script:
             name: stopping application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME pkill -9 uwsgi
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME pkill -INT uwsgi
 
         - script:
             name: cleanning remote environment
@@ -83,8 +68,8 @@ deploy:
         - script:
             name: unpacking application
             code: |
-                ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME tar zxvf ~/`basename $DEPLOY_TARBALL_PATH`
+                ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME tar zxv -C ~/app -f ~/`basename $PACKAGE_PATH`
 
         - script:
             name: starting application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME uwsgi --init=~/app/uwsgi.ini
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME ~/app/deploy.sh deploy start deploy

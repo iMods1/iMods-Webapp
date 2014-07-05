@@ -1,7 +1,7 @@
 #!/bin/bash
 
 usage(){
-    echo "usage:$0 [package|unpackage <file>|clean|start [dev|deploy] [ini file]|reload|stop]"
+    echo "usage:$0 [package [output_path]|unpackage <file>|clean|start [dev|deploy] [ini file]|reload|stop]"
 }
 
 check_deploy_env(){
@@ -18,7 +18,7 @@ main(){
             PACKAGE_NAME=`date +%F_%H-%M-%S`.tar.gz
             PACKAGE_PATH=$PACKAGE_DIR/$PACKAGE_NAME
             [ ! -d ./packages ] && mkdir $PACKAGE_DIR
-            tar zvc ./deploy.sh ./imods ./uwsgi.ini -f $PACKAGE_PATH
+            tar zvc ./deploy.sh ./imods ./uwsgi.ini -f "${2-$PACKAGE_PATH}"
             echo $PACKAGE_PATH
             ;;
         unpackage)
