@@ -60,7 +60,7 @@ deploy:
                 ############################################
                 ls -al
                 ############################################
-                chmod 600 $PRIVATEKEY_PATH
+                chmod 644 $PRIVATEKEY_PATH
                 scp -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $PACKAGE_PATH $SSH_HOSTNAME:~/
 
         - script:
