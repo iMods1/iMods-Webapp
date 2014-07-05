@@ -65,17 +65,17 @@ deploy:
 
         - script:
             name: stopping application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME pkill -INT uwsgi
+            code: ssh -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME pkill -INT uwsgi
 
         - script:
             name: cleanning remote environment
-            code: ssh -i $PRIVATEKEY_PATH -F SSH_CONFIG_PATH rm -rf ~/app/*
+            code: ssh -vvv -i $PRIVATEKEY_PATH -F SSH_CONFIG_PATH rm -rf ~/app/*
 
         - script:
             name: unpacking application
             code: |
-                ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME tar zxv -C ~/app -f ~/`basename $PACKAGE_PATH`
+                ssh -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME tar zxv -C ~/app -f ~/`basename $PACKAGE_PATH`
 
         - script:
             name: starting application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME ~/app/deploy.sh deploy start deploy
+            code: ssh -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME ~/app/deploy.sh deploy start deploy
