@@ -60,8 +60,8 @@ deploy:
                 ############################################
                 ls -al
                 ############################################
-                chmod 644 $PRIVATEKEY_PATH
-                scp -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $PACKAGE_PATH $SSH_HOSTNAME:~/
+                chmod 640 $PRIVATEKEY_PATH
+                scp -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH -o UserKnownHostsFile=no $PACKAGE_PATH $SSH_HOSTNAME:~/
 
         - script:
             name: stopping application
