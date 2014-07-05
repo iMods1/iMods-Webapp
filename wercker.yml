@@ -21,12 +21,17 @@ deploy:
         - add-to-known_hosts:
             hostname: imods.wunderkind.us
             fingerprint: 8c:2d:c2:d3:13:10:79:47:45:c3:da:60:5e:12:b1:14
+
         - mktemp:
+            name: creating temporary private key
             envvar: PRIVATEKEY_PATH
+
         - mktemp:
+            name: creating temporary ssh config
             envvar: SSH_CONFIG_PATH
 
         - mktemp:
+            name: creating package file
             envvar: PACKAGE_PATH
 
         - create-file:
@@ -46,7 +51,7 @@ deploy:
         - script:
             name: packaging application
             code: |
-                PWD=$WERCKER_SOURCE_DIR $WERCKER_SOURCE_DIR/deploy.sh package $PACKAGE_PATH
+                ./deploy.sh package $PACKAGE_PATH
 
         - script:
             name: transfer application
@@ -55,7 +60,7 @@ deploy:
                 echo ================================================
                 ls -al
                 echo ================================================
-                scp -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $DEPLOY_TARBALL_PATH $SSH_HOSTNAME
+                scp -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $PACKAGE_PATH $SSH_HOSTNAME
 
         - script:
             name: stopping application

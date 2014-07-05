@@ -15,11 +15,11 @@ main(){
     case "$1" in
         package)
             PACKAGE_DIR=packages
-            PACKAGE_NAME=`date +%F_%H-%M-%S`.tar.gz
+            PACKAGE_NAME=`TZ='America/New York' date +%F_%H-%M-%S`.tar.gz
             PACKAGE_PATH=$PACKAGE_DIR/$PACKAGE_NAME
             [ ! -d ./packages ] && mkdir $PACKAGE_DIR
             tar zvc ./deploy.sh ./imods ./uwsgi.ini -f "${2-$PACKAGE_PATH}"
-            echo $PACKAGE_PATH
+            echo ${2-$PACKAGE_PATH}
             ;;
         unpackage)
             if [ -z "$2" ];then
