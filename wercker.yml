@@ -65,7 +65,7 @@ deploy:
 
         - script:
             name: stopping application
-            code: ssh -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'pgrep uwsgi && pkill -INT uwsgi || return 0'
+            code: ssh -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'pgrep uwsgi && pkill -INT uwsgi || echo'
 
         - script:
             name: cleanning remote environment
