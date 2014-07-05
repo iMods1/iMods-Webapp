@@ -37,7 +37,7 @@ deploy:
         - create-file:
             name: write private key
             filename: $PRIVATEKEY_PATH
-            content: $DEPLOY_PRIVATE
+            content: $DEPLOY_SSH_PRIVATE
             overwrite: true
             hide-from-log: true
 
