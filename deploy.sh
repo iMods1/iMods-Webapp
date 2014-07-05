@@ -53,7 +53,13 @@ main(){
             echo "Creating virtualenv in ~/app..."
             virtualenv venv
             source venv/bin/activate
-            pip install -r requirements.txt
+            echo "Installing packages using pip..."
+            TEMP_REQUIREMENT_PATH=`mktemp`
+            # Skip compiling and installing uwsgi, because it's slow
+            # uwsgi should be already installed globally on the server
+            grep -v 'uwsgi' requirements.txt > $TEMP_REQUIREMENT_PATH
+            pip install -r $TEMP_REQUIREMENT_PATH
+            rm $TEMP_REQUIREMENT_PATH
             ;;
         *) usage;;
     esac
