@@ -18,7 +18,7 @@ main(){
             PACKAGE_NAME=`TZ='America/New York' date +%F_%H-%M-%S`.tar.gz
             PACKAGE_PATH=$PACKAGE_DIR/$PACKAGE_NAME
             [ ! -d ./packages ] && mkdir $PACKAGE_DIR
-            tar zvc ./deploy.sh ./imods ./uwsgi.ini -f "${2-$PACKAGE_PATH}"
+            tar zvc ./deploy.sh ./imods ./uwsgi.ini ./requirements.txt -f "${2-$PACKAGE_PATH}"
             echo ${2-$PACKAGE_PATH}
             ;;
         unpackage)
@@ -46,6 +46,14 @@ main(){
             ;;
         stop)
             pkill -INT uwsgi
+            ;;
+        init)
+            check_deploy_env
+            cd ~/app
+            echo "Creating virtualenv in ~/app..."
+            virtualenv venv
+            source venv/bin/activate
+            pip install -r requirements.txt
             ;;
         *) usage;;
     esac
