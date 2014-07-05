@@ -33,6 +33,7 @@ main(){
             check_deploy_env
             rm -rf packages
             rm -rf ~/app/*
+            rm -rf ~/tmp*
             ;;
         start)
             uwsgi --ini ${3-uwsgi.ini}:${2-dev}
@@ -57,7 +58,7 @@ main(){
             TEMP_REQUIREMENT_PATH=`mktemp`
             # Skip compiling and installing uwsgi, because it's slow
             # uwsgi should be already installed globally on the server
-            grep -v 'uwsgi' requirements.txt > $TEMP_REQUIREMENT_PATH
+            grep -v 'uWSGI==' requirements.txt > $TEMP_REQUIREMENT_PATH
             pip install -r $TEMP_REQUIREMENT_PATH
             rm $TEMP_REQUIREMENT_PATH
             ;;
