@@ -60,6 +60,10 @@ deploy:
                 ############################################
                 ls -al
                 ############################################
+                echo PACKAGE_PATH=$PACKAGE_PATH
+                echo SSH_HOSTNAME=$SSH_HOSTNAME
+                echo SSH_CONFIG_CONTENT:
+                cat $SSH_CONFIG_PATH
                 scp -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $PACKAGE_PATH $SSH_HOSTNAME:~/
 
         - script:
