@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS "USER"(
 
 -- Contains all registered devices with their owner id
 CREATE TABLE IF NOT EXISTS "DEVICE"(
-    "owner" INT REFERENCES "USER"("uid"),
+    "uid" INT REFERENCES "USER"("uid"),
     -- the user defined device name, retrieved when registering
     -- If it's empty, automatically create one based on model and user's real name
     "device_name" VARCHAR(200) NOT NULL,
@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS "ITEM"(
     "package_signature" VARCHAR NOT NULL, -- the signature of the package file stored on the repo server (AWS S3)
     "package_path" VARCHAR NOT NULL, -- path of the package file stored on the repo server (AWS S3)
     "preview_assets_path" VARCHAR NOT NULL, -- path of the preview assets
+    "price" FLOAT,
     "summary" CHAR(500),
     "description" VARCHAR,
     "icon_path" VARCHAR, -- path to the icon file (Use S3)
@@ -72,6 +73,17 @@ CREATE TABLE IF NOT EXISTS "DEPENDENCY"(
     "package_id" INT REFERENCES "ITEM"("iid"),
     "dependency_id" INT REFERENCES "ITEM"("iid"),
     PRIMARY KEY("dep_id")
+);
+
+CREATE IF TABLE NOT EXISTS "ORDER"(
+    "oid" INT NOT NULL,
+    "uid" INT REFERENCES "USER"("uid"),
+    "item_it" INT REFERENCES "ITEM"("iid"),
+    -- no quantity, it should always be one, maybe add gift feature later
+    "total_price" FLOAT NOT NULL, -- might be different from the item price(e.g. using a promotion code or deal)
+    "currency" CHAR(3) NOT NULL, -- currency code
+    "order_date" DATE NOT NULL,
+    PRIMARY KEY ("oid")
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "DEP_IDX" ON "DEPENDENCIES"("package_id");
