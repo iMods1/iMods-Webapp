@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS "USER"(
 );
 
 -- Contains all registered devices with their owner id
-CREATE TABLE IF NOT EXISTS "DEVICES"(
+CREATE TABLE IF NOT EXISTS "DEVICE"(
     "owner" INT REFERENCES "USER"("uid"),
     -- the user defined device name, retrieved when registering
     -- If it's empty, automatically create one based on model and user's real name
