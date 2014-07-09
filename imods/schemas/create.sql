@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS "USER"(
-    "uid" INT NOT NULL AUTOINCREMENT,
+    "uid" INT NOT NULL ,
     "email" VARCHAR(200) NOT NULL UNIQUE,
     "password" VARCHAR(200) NOT NULL,
     "first_name" VARCHAR(50) NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS "DEVICES"(
 );
 
 CREATE TABLE IF NOT EXISTS "BILLING_INFO"(
-    "bid" INT NOT NULL AUTOCREMENT,
+    "bid" INT NOT NULL,
     "uid" INT REFERENCES "USER"("uid"),
 
     -- billing address, should match credit card's billing address,
@@ -42,18 +42,16 @@ CREATE TABLE IF NOT EXISTS "BILLING_INFO"(
 );
 
 CREATE TABLE IF NOT EXISTS "CATEGORY"(
-    "cid" INT NOT NULL AUTOINCREMENT,
+    "cid" INT NOT NULL ,
     "name" VARCHAR(100),
     "parent_id" INT REFERENCES "CATEGORY"("cid"),
     "description" VARCHAR,
     PRIMARY KEY("cid")
 );
 
--- TODO: Add tag tables
-
 CREATE TABLE IF NOT EXISTS "ITEM"(
-    "iid" INT NOT NULL AUTOINCREMENT,
-    "author_id" CHAR(200) REFERENCES "USER"("author_identifier")
+    "iid" INT NOT NULL ,
+    "author_id" CHAR(200) REFERENCES "USER"("author_identifier"),
     "uniq_name" CHAR(200) NOT NULL, -- unique package name string to identify an item, e.g. coreutils, binutils etc
     "display_name" VARCHAR NOT NULL, -- display name in the store
     "version" CHAR(100) NOT NULL,
@@ -70,7 +68,7 @@ CREATE TABLE IF NOT EXISTS "ITEM"(
 );
 
 CREATE TABLE IF NOT EXISTS "DEPENDENCIES"(
-    "dep_id" INT NOT NULL AUTOINCREMENT,
+    "dep_id" INT NOT NULL ,
     "package_id" INT REFERENCES "ITEM"("iid"),
     "dependency_id" INT REFERENCES "ITEM"("iid"),
     PRIMARY KEY("dep_id")
