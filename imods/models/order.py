@@ -1,9 +1,13 @@
 from imods import db
 from datetime import datetime
+from imods.models.mixin import JsonSerialize
+from imods.models.billing_info import BillingInfo
 
 
-class Order(db.Model):
+class Order(db.Model, JsonSerialize):
     __tablename__ = "ORDER"
+    __public__ = ("oid", "user", "pkg_name", "billing", "quantity", "currency",
+                  "total_price", "charged", "order_date")
 
     oid = db.Column(db.Integer, primary_key=True)
     uid = db.Column(db.Integer, db.ForeignKey("USER.uid", ondelete="CASCADE"))
@@ -16,6 +20,8 @@ class Order(db.Model):
     # payment failed
     charged = db.Column(db.Float, nullable=True)
     order_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    billing = db.relationship(BillingInfo)
 
     def __init__(self, user, item, billing, total_price, **kwargs):
         self.uid = user.uid

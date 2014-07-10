@@ -1,10 +1,14 @@
 from imods import db
+from imods.models.mixin import JsonSerialize
 from datetime import datetime
 import category
 
 
-class Item(db.Model):
+class Item(db.Model, JsonSerialize):
     __tablename__ = "ITEM"
+    __public__ = ("category_id", "author", "package_name", "display_name",
+                  "package_version", "package_assets_path", "package_dependencies",
+                  "price", "summary", "description", "add_date", "last_update_date")
     # The primary key is the combination of the package name and the version,
     # because a package may have multiple versions and may be published by
     # different authors.
@@ -21,22 +25,22 @@ class Item(db.Model):
     # e.g. libc is standard c library and the author may not be present in
     # the database, so the author_id should be NULL
     # TODO: We may add a default author and assign all orhpan items to that author
-    author_id            = db.Column(db.String(100),
-                                     db.ForeignKey("USER.author_identifier"))
-    package_name         = db.Column(db.String(200), nullable=False)
-    display_name         = db.Column(db.String(100), nullable=False)
-    package_version      = db.Column(db.String(100), nullable=False)
-    package_signature    = db.Column(db.String())
-    package_path         = db.Column(db.String())
-    package_assets_path  = db.Column(db.String())
+    author_id = db.Column(db.String(100),
+                          db.ForeignKey("USER.author_identifier"))
+    package_name = db.Column(db.String(200), nullable=False)
+    display_name = db.Column(db.String(100), nullable=False)
+    package_version = db.Column(db.String(100), nullable=False)
+    package_signature = db.Column(db.String())
+    package_path = db.Column(db.String())
+    package_assets_path = db.Column(db.String())
     package_dependencies = db.Column(db.String())
-    price                = db.Column(db.Float())
-    summary              = db.Column(db.String(500))
-    description          = db.Column(db.String())
+    price = db.Column(db.Float())
+    summary = db.Column(db.String(500))
+    description = db.Column(db.String())
     # Here we handle datetime at ORM level, because some databases don't handle
     # it well, and often cause problems.
-    add_date             = db.Column(db.Date(), default=datetime.utcnow, nullable=False)
-    last_update_date     = db.Column(db.Date(), onupdate=datetime.utcnow, nullable=False)
+    add_date = db.Column(db.Date(), default=datetime.utcnow, nullable=False)
+    last_update_date = db.Column(db.Date(), onupdate=datetime.utcnow, nullable=False)
 
     def __init__(self, pkg_name, pkg_version, display_name, **kwargs):
         author = kwargs.get('author', None)
@@ -48,7 +52,7 @@ class Item(db.Model):
         self.package_path = kwargs.get('pkg_parth', db.NULL)
         self.package_assets_path = kwargs.get('pkg_preview_assets', db.NULL)
         self.summary = kwargs.get('summary', db.NULL)
-        self.description = description or db.NULL
+        self.description = kwargs.get('description', db.NULL)
         self.dependencies = kwargs.get('dependencies', db.NULL)
         price = kwargs.get('price')
         if not price or price < 0.01:

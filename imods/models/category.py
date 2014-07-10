@@ -1,9 +1,11 @@
 from imods import db
+from imods.models.mixin import JsonSerialize
 
 
-class Category(db.Model):
+class Category(db.Model, JsonSerialize):
     __tablename__ = "CATEGORY"
     __table_args = {"extend_existing": True}
+    __public__ = ("cid", "parent_id", "name", "description", "children", "items")
 
     cid = db.Column(db.Integer, primary_key=True, nullable=False)
     parent_id = db.Column(db.Integer, db.ForeignKey("CATEGORY.cid"))

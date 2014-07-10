@@ -1,8 +1,10 @@
 from imods import db
+from imods.models.mixin import JsonSerialize
 
 
-class Device(db.Model):
+class Device(db.Model, JsonSerialize):
     __tablename__ = "DEVICE"
+    __public__ = ("owner", "device_name", "IMEI", "UDID", "model")
 
     uid = db.Column(db.Integer, db.ForeignKey('USER.uid', ondelete="CASCADE"))
     device_name = db.Column(db.String(200), nullable=False)

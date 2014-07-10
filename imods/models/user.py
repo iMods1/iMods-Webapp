@@ -3,10 +3,12 @@ from imods.models.device import Device
 from imods.models.billing_info import BillingInfo
 from imods.models.item import Item
 from imods.models.order import Order
+from imods.models.mixin import JsonSerialize
 
 
-class User(db.Model):
+class User(db.Model, JsonSerialize):
     __tablename__ = 'USER'
+    __public__ = ("uid", "email", "fullname", "age", "author_identifier")
 
     uid = db.Column(db.Integer, nullable=False, primary_key=True, autoincrement=True)
     email = db.Column(db.String(200), nullable=False, unique=True)

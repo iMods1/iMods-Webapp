@@ -6,5 +6,5 @@ app.config.from_object('config')
 
 db = SQLAlchemy(app)
 
-from imods.user.view import user_mod
-app.register_blueprint(user_mod)
+from imods.api.routes import api_mod
+app.register_blueprint(api_mod)

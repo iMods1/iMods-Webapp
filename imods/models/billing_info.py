@@ -1,9 +1,11 @@
 from imods import db
 from constants import BillingType
+from imods.models.mixin import JsonSerialize
 
 
-class BillingInfo(db.Model):
+class BillingInfo(db.Model, JsonSerialize):
     __tablename__ = "BILLING_INFO"
+    __public__ = ("bid", "uid", "address", "type_")
 
     bid = db.Column(db.Integer, primary_key=True, nullable=False)
     uid = db.Column(db.Integer, db.ForeignKey('USER.uid'))
