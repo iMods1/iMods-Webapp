@@ -1,4 +1,4 @@
-.git
+.*
 bin/*
 lib/*
 include/*
@@ -7,4 +7,3 @@ local/*
 *~
 *.pyc
 *.tmp
-.idea

@@ -36,7 +36,21 @@ main(){
             rm -rf ~/tmp*
             ;;
         start)
-            uwsgi --ini ${3-uwsgi.ini}:${2-dev}
+            TARGET=${2-dev}
+            CONFIG=${3-uwsgi.ini}
+            case "$TARGET" in
+                dev)
+                    python ./run.py
+                    ;;
+                dev-uwsgi)
+                    uwsgi --ini $CONFIG:dev
+                    ;;
+                deploy)
+                    uwsgi --ini $CONFIG:deploy
+                    ;;
+                *)
+                    uwsgi --ini $CONFIG:$TARGET
+            esac
             ;;
         reload)
             if [ ! -r /tmp/uwsgi_imods.pid ];then
