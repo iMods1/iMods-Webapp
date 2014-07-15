@@ -1,8 +1,8 @@
 from imods import db
-from imods.models.mixin import JsonSerialize
+from imods.models.mixin import JSONSerialize
 
 
-class Device(db.Model, JsonSerialize):
+class Device(db.Model, JSONSerialize):
     __tablename__ = "DEVICE"
     __public__ = ("uid", "device_name", "IMEI", "UDID", "model")
 

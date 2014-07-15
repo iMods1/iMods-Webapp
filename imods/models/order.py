@@ -1,11 +1,11 @@
 from imods import db
 from datetime import datetime
-from imods.models.mixin import JsonSerialize
+from imods.models.mixin import JSONSerialize
 from imods.models.billing_info import BillingInfo
 from imods.models.constants import OrderStatus
 
 
-class Order(db.Model, JsonSerialize):
+class Order(db.Model, JSONSerialize):
     __tablename__ = "ORDER"
     __public__ = ("oid", "user", "pkg_name", "billing", "quantity", "currency",
                   "total_price", "total_charged", "order_date")

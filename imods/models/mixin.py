@@ -1,7 +1,7 @@
 from datetime import datetime, date
 
 
-class JsonSerialize(object):
+class JSONSerialize(object):
     'Mixin for retrieving public fields of model in json-compatible format'
     __public__ = None
 
@@ -28,7 +28,7 @@ class JsonSerialize(object):
             ret = []
             for v in value:
                 ret.append(cls._serialize(v))
-        elif JsonSerialize in value.__class__.__bases__:
+        elif JSONSerialize in value.__class__.__bases__:
             ret = value.get_public()
         else:
             ret = value

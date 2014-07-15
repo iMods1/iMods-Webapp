@@ -3,7 +3,7 @@ from werkzeug import check_password_hash, generate_password_hash
 from imods import db
 from imods.models import User, Order, Item, Device, Category, BillingInfo
 from imods.models import UserRole, OrderStatus
-from imods.models.mixin import JsonSerialize
+from imods.models.mixin import JSONSerialize
 from imods.api.decorators import require_login, require_json
 from imods.api.decorators import require_privileges
 from imods.api.helpers import db_scoped_session
@@ -108,7 +108,7 @@ def device_list(device_id):
     elif device_id is None:
         # List all devices
         devices = Device.query.filter_by(uid=session['user']['uid']).first()
-        return map(JsonSerialize.get_public, devices)
+        return map(JSONSerialize.get_public, devices)
 
 
 @api_mod.route("/category/list", defaults={"cid": None})
@@ -176,7 +176,7 @@ def billing_list(bid):
         return billing.get_public()
     else:
         billings = BillingInfo.query.all()
-        return map(JsonSerialize.get_public, billings)
+        return map(JSONSerialize.get_public, billings)
 
 
 @api_mod.route("/billing/add")
@@ -237,7 +237,7 @@ def item_list(iid):
         return item.get_public()
     else:
         items = Item.query.all()
-        return map(JsonSerialize.get_public, items)
+        return map(JSONSerialize.get_public, items)
 
 
 @api_mod.route("/item/add")
@@ -323,7 +323,7 @@ def order_list(oid):
         # List all orders of a user
         # TODO: Add paging
         orders = Order.query.filter_by(uid=uid)
-        return map(JsonSerialize.get_public, orders)
+        return map(JSONSerialize.get_public, orders)
 
 
 @api_mod.route("/order/<int:oid>/update")

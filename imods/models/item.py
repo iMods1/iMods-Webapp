@@ -1,11 +1,11 @@
 from imods import db
-from imods.models.mixin import JsonSerialize
+from imods.models.mixin import JSONSerialize
 from datetime import datetime
 # Removing 'import category' will cause table not found error
 import category
 
 
-class Item(db.Model, JsonSerialize):
+class Item(db.Model, JSONSerialize):
     __tablename__ = "ITEM"
     __public__ = ("category_id", "author", "package_name", "display_name",
                   "package_version", "package_assets_path", "package_dependencies",

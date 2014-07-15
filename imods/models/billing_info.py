@@ -1,9 +1,9 @@
 from imods import db
 from constants import BillingType
-from imods.models.mixin import JsonSerialize
+from imods.models.mixin import JSONSerialize
 
 
-class BillingInfo(db.Model, JsonSerialize):
+class BillingInfo(db.Model, JSONSerialize):
     __tablename__ = "BILLING_INFO"
     __public__ = ("bid", "uid", "address", "zipcode", "state", "country", "type_")
 

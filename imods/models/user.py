@@ -3,11 +3,11 @@ from imods.models.device import Device
 from imods.models.billing_info import BillingInfo
 from imods.models.item import Item
 from imods.models.order import Order
-from imods.models.mixin import JsonSerialize
+from imods.models.mixin import JSONSerialize
 from imods.models.constants import UserRole, AccountStatus
 
 
-class User(db.Model, JsonSerialize):
+class User(db.Model, JSONSerialize):
     __tablename__ = 'USER'
     __public__ = ("uid", "email", "fullname", "age", "author_identifier")
 
