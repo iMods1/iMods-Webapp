@@ -1,6 +1,7 @@
 from imods import db
 from imods.models.mixin import JsonSerialize
 from datetime import datetime
+# Removing 'import category' will cause table not found error
 import category
 
 
@@ -43,8 +44,9 @@ class Item(db.Model, JsonSerialize):
     last_update_date = db.Column(db.Date(), onupdate=datetime.utcnow, nullable=False)
 
     def __init__(self, pkg_name, pkg_version, display_name, **kwargs):
-        author = kwargs.get('author', None)
-        self.author_id = author.author_identifier if author else db.NULL
+        author = kwargs.get('author')
+        author_id = kwargs.get('author_id')
+        self.author_id = author.author_identifier if author else author_id
         self.package_name = pkg_name
         self.package_version = pkg_version
         self.display_name = display_name

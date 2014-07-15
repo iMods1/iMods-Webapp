@@ -5,7 +5,7 @@ from imods.models.mixin import JsonSerialize
 class Category(db.Model, JsonSerialize):
     __tablename__ = "CATEGORY"
     __table_args = {"extend_existing": True}
-    __public__ = ("cid", "parent_id", "name", "description", "children", "items")
+    __public__ = ("cid", "parent_id", "name", "description", "children")
 
     cid = db.Column(db.Integer, primary_key=True, nullable=False)
     parent_id = db.Column(db.Integer, db.ForeignKey("CATEGORY.cid"))
@@ -20,9 +20,11 @@ class Category(db.Model, JsonSerialize):
 
     items = db.relationship("Item", backref="category", lazy="dynamic")
 
-    def __init__(self, name, parent, description=None):
+    def __init__(self, name, description=None, **kwargs):
         self.name = name
-        self.parent_id = parent.cid
+        pid = kwargs.get('parent_id')
+        parent = kwargs.get('parent')
+        self.parent_id = parent.cid if parent else pid
         self.description = description or db.NULL
 
     def __repr__(self):
