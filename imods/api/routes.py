@@ -215,7 +215,7 @@ def billing_update(bid):
     return success_reponse
 
 
-@api_mod.route("/user/billing/<int:bid>/delete")
+@api_mod.route("/billing/<int:bid>/delete")
 @require_login
 @require_json
 def billing_delete(bid):
