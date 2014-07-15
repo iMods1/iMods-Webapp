@@ -77,7 +77,7 @@ def user_update(uid):
     return success_reponse
 
 
-@api_mod.route("/user/device/add", methods=["POST"])
+@api_mod.route("/device/add", methods=["POST"])
 @require_login
 @require_json
 def register_device():
@@ -93,8 +93,8 @@ def register_device():
     return success_reponse
 
 
-@api_mod.route("/user/device/list", defaults={"device_id": None})
-@api_mod.route("/user/device/<int:device_id>")
+@api_mod.route("/device/list", defaults={"device_id": None})
+@api_mod.route("/device/<int:device_id>")
 @require_login
 @require_json
 def device_list(device_id):
@@ -165,8 +165,8 @@ def category_delete(cid):
     return success_reponse
 
 
-@api_mod.route("/user/billing/list", defaults={'bid': None})
-@api_mod.route("/user/billing/<int:bid>")
+@api_mod.route("/billing/list", defaults={'bid': None})
+@api_mod.route("/billing/<int:bid>")
 @require_login
 def billing_list(bid):
     if bid:
@@ -179,7 +179,7 @@ def billing_list(bid):
         return map(JsonSerialize.get_public, billings)
 
 
-@api_mod.route("/user/billing/add")
+@api_mod.route("/billing/add")
 @require_login
 @require_json
 def billing_add():
@@ -197,7 +197,7 @@ def billing_add():
     return success_reponse
 
 
-@api_mod.route("/user/billing/<int:bid>/update")
+@api_mod.route("/billing/<int:bid>/update")
 @require_login
 @require_json
 def billing_update(bid):
@@ -290,7 +290,7 @@ def item_delete(iid):
         raise InsufficientPrivileges()
 
 
-@api_mod.route("/order/new")
+@api_mod.route("/order/add")
 @require_login
 @require_json
 def order_new():
