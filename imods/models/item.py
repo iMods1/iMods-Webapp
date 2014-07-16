@@ -1,23 +1,19 @@
 from imods import db
-from imods.models.mixin import JsonSerialize
+from imods.models.mixin import JSONSerialize
 from datetime import datetime
 # Removing 'import category' will cause table not found error
 import category
+# Remove PEP8 'not used' error
+assert category is not None
 
 
-class Item(db.Model, JsonSerialize):
+class Item(db.Model, JSONSerialize):
     __tablename__ = "ITEM"
-    __public__ = ("category_id", "author", "package_name", "display_name",
-                  "package_version", "package_assets_path", "package_dependencies",
-                  "price", "summary", "description", "add_date", "last_update_date")
-    # The primary key is the combination of the package name and the version,
-    # because a package may have multiple versions and may be published by
-    # different authors.
-    # If an item is a derivative(fork) of the another item, then it should be named with a
-    # new package name.
-    __table_args__ = (db.PrimaryKeyConstraint("package_name", "package_version",
-                                              name="package_id_PK"),)
-
+    __public__ = ("iid", "category_id", "author_id", "pkg_name",
+                  "display_name", "pkg_version", "pkg_assets_path",
+                  "pkg_dependencies", "price", "summary", "description",
+                  "add_date", "last_update_date")
+    iid = db.Column(db.Integer, primary_key=True)
     # ON DELETE CASCADE prevents the category from being deleted if it has at
     # least one item associated with it.
     category_id = db.Column(db.Integer,
@@ -25,44 +21,47 @@ class Item(db.Model, JsonSerialize):
     # author_id can be NULL because an item may be from a foreign source,
     # e.g. libc is standard c library and the author may not be present in
     # the database, so the author_id should be NULL
-    # TODO: We may add a default author and assign all orhpan items to that author
+    # TODO: We may add a default author and assign all orhpan items to
+    # that author
     author_id = db.Column(db.String(100),
                           db.ForeignKey("USER.author_identifier"))
-    package_name = db.Column(db.String(200), nullable=False)
+    pkg_name = db.Column(db.String(200), unique=True, nullable=False)
     display_name = db.Column(db.String(100), nullable=False)
-    package_version = db.Column(db.String(100), nullable=False)
-    package_signature = db.Column(db.String())
-    package_path = db.Column(db.String())
-    package_assets_path = db.Column(db.String())
-    package_dependencies = db.Column(db.String())
+    pkg_version = db.Column(db.String(100), nullable=False)
+    pkg_signature = db.Column(db.String())
+    pkg_path = db.Column(db.String())
+    pkg_assets_path = db.Column(db.String())
+    pkg_dependencies = db.Column(db.String())
     price = db.Column(db.Float())
     summary = db.Column(db.String(500))
     description = db.Column(db.String())
     # Here we handle datetime at ORM level, because some databases don't handle
     # it well, and often cause problems.
     add_date = db.Column(db.Date(), default=datetime.utcnow, nullable=False)
-    last_update_date = db.Column(db.Date(), onupdate=datetime.utcnow, nullable=False)
+    last_update_date = db.Column(db.Date(), default=datetime.utcnow,
+                                 onupdate=datetime.utcnow, nullable=False)
 
     def __init__(self, pkg_name, pkg_version, display_name, **kwargs):
         author = kwargs.get('author')
         author_id = kwargs.get('author_id')
         self.author_id = author.author_identifier if author else author_id
-        self.package_name = pkg_name
-        self.package_version = pkg_version
+        self.pkg_name = pkg_name
+        self.pkg_version = pkg_version
         self.display_name = display_name
-        self.package_signature = kwargs.get('pkg_signature', db.NULL)
-        self.package_path = kwargs.get('pkg_parth', db.NULL)
-        self.package_assets_path = kwargs.get('pkg_preview_assets', db.NULL)
-        self.summary = kwargs.get('summary', db.NULL)
-        self.description = kwargs.get('description', db.NULL)
-        self.dependencies = kwargs.get('dependencies', db.NULL)
+        self.pkg_signature = kwargs.get('pkg_signature')
+        self.pkg_path = kwargs.get('pkg_parth')
+        self.pkg_assets_path = kwargs.get('pkg_preview_assets')
+        self.summary = kwargs.get('summary')
+        self.description = kwargs.get('description')
+        self.pkg_dependencies = kwargs.get('pkg_dependencies')
         price = kwargs.get('price')
         if not price or price < 0.01:
             price = db.NULL
         self.price = price
 
     def dependencies(self):
-        return "<Dependencies: %r>" % (self.package_dependencies)
+        return "<Dependencies: %r>" % (self.pkg_dependencies)
 
     def __repr__(self):
-        return "<Item '%r'-%r by %r>" % (self.package_name, self.package_version, self.author_id)
+        return "<Item '%r'-%r by %r>" % (self.pkg_name, self.pkg_version,
+                                         self.author_id)
