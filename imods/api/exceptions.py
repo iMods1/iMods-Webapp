@@ -84,10 +84,16 @@ class InsufficientPrivileges(APIException):
 
 class CategoryNotEmpty(APIException):
     status_code = 409
-    message = 'The category to delete has one or more sub-categories or items,\
+    message = 'Category is not empty:The category to delete has one or more \
+sub-categories or items,\
 please delete all sub-categories and items before deletion.'
 
 
 class OrderNotChangable(APIException):
     status_code = 401
     message = 'Completed or cancelled orders cannot be changed.'
+
+
+class CategorySelfParent(APIException):
+    status_code = 409
+    message = "Category's parent cannot be itself."

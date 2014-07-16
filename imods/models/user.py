@@ -48,7 +48,9 @@ class User(db.Model, JSONSerialize):
         self.fullname = fullname
         self.email = email
         self.password = password
+        self.age = age
         self.private_key = private_key
+        self.author_identifier = author_identifier
 
     def __repr__(self):
         return "<User %r(%r uid=%r)>" % (self.fullname, self.email, self.uid)

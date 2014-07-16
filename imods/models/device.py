@@ -4,7 +4,7 @@ from imods.models.mixin import JSONSerialize
 
 class Device(db.Model, JSONSerialize):
     __tablename__ = "DEVICE"
-    __public__ = ("uid", "device_name", "IMEI", "UDID", "model")
+    __public__ = ("dev_id", "uid", "device_name", "IMEI", "UDID", "model")
 
     dev_id = db.Column(db.Integer, nullable=False, primary_key=True)
     uid = db.Column(db.Integer, db.ForeignKey('USER.uid', ondelete="CASCADE"))
