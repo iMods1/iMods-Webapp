@@ -18,7 +18,7 @@ main(){
             BUILD_NAME=`TZ='America/New York' date +%F_%H-%M-%S`.tar.gz
             BUILD_PATH=$BUILD_DIR/$BUILD_NAME
             [ ! -d ./packages ] && mkdir $BUILD_DIR
-            tar zvc ./deploy.sh ./config.py ./imods ./uwsgi.ini ./requirements.txt -f "${2-$BUILD_PATH}"
+            tar zvc ./deploy.sh ./imods ./uwsgi.ini ./requirements.txt -f "${2-$BUILD_PATH}"
             echo ${2-$BUILD_PATH}
             ;;
         unpackage)
