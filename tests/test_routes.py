@@ -8,6 +8,7 @@ import sys
 sys.path.append('')
 import imods
 from imods.models import UserRole, OrderStatus
+from imods.api.exceptions import *
 
 
 class TestRoutes(unittest.TestCase):
@@ -75,7 +76,7 @@ class TestRoutes(unittest.TestCase):
                                     "ryan123", 10)
             assert rv.status_code == 200
             rv = self.user_login(server, "ryan@ryan.com", "ryan321")
-            assert rv.status_code != 200
+            assert rv.status_code == UserCredentialsDontMatch.status_code
             assert 'Invalid email and password' in rv.data
 
     def test_register_fail(self):
@@ -85,7 +86,7 @@ class TestRoutes(unittest.TestCase):
             assert rv.status_code == 200
             rv = self.user_register(server, "ryan1", "ryan1@ryan.com",
                                     "ryan123", 10)
-            assert rv.status_code == 409
+            assert rv.status_code == UserAlreadRegistered.status_code
             assert 'already registered' in rv.data
 
     def test_user_update(self):
@@ -200,7 +201,7 @@ class TestRoutes(unittest.TestCase):
             assert js3['parent_id'] == js1["cid"]
 
             rv4 = server.get("/api/category/%d/delete" % js1["cid"])
-            assert rv4.status_code == 409
+            assert rv4.status_code == CategoryNotEmpty.status_code
             assert 'not empty' in rv4.data
 
             rv4 = server.get("/api/category/%d/delete" % js2["cid"])
@@ -208,7 +209,7 @@ class TestRoutes(unittest.TestCase):
             assert 'successful' in rv4.data
 
             rv5 = server.get("/api/category/%d" % js2["cid"])
-            assert rv5.status_code == 500
+            assert rv5.status_code == ResourceIDNotFound.status_code
             assert "not found" in rv5.data
 
     def test_billing(self):
@@ -279,7 +280,7 @@ class TestRoutes(unittest.TestCase):
             assert 'successful' in rv5.data
 
             rv6 = server.get("/api/billing/%d" % js2["bid"])
-            assert rv6.status_code == 500
+            assert rv6.status_code == ResourceIDNotFound.status_code
             assert 'not found' in rv6.data
 
     def test_item(self):
@@ -339,7 +340,7 @@ class TestRoutes(unittest.TestCase):
             assert 'successful' in rv3.data
 
             rv4 = server.get("/api/item/%d" % js1["iid"])
-            assert rv4.status_code == 500
+            assert rv4.status_code == ResourceIDNotFound.status_code
             assert 'not found' in rv4.data
 
     def test_order(self):

@@ -67,12 +67,12 @@ class BadURLRequest(APIException):
     message = 'Bad URL Request, check parameters'
 
 
-class UserNotFound(InternalException):
+class UserNotFound(APIException):
     status_code = 404
     message = 'Internal Error'
 
 
-class ResourceIDNotFound(InternalException):
+class ResourceIDNotFound(APIException):
     status_code = 404
     message = 'Recource ID is not found'
 
