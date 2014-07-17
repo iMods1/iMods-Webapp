@@ -1,3 +1,6 @@
+"""iMods server documentation
+.. moduleauthor:: Ryan Feng <odayfans@gmail.com>
+"""
 from flask import Flask
 from flask.ext.sqlalchemy import SQLAlchemy
 import os

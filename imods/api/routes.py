@@ -1,3 +1,10 @@
+"""
+.. module:: routes
+    :synopsis: Endpoints of user API
+
+.. moduleauthor:: Ryan Feng <odayfans@gmail.com>
+
+"""
 from flask import request, session, Blueprint, json
 from werkzeug import check_password_hash, generate_password_hash
 from imods.models import User, Order, Item, Device, Category, BillingInfo
@@ -13,19 +20,36 @@ from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
 from imods.api.exceptions import CategorySelfParent
 from datetime import datetime
 import operator
+import base64
 
 
 api_mod = Blueprint("api_mods", __name__, url_prefix="/api")
 setup_api_exceptions(api_mod)
 
 
-success_response = {'message': 'successful'}
+success_response = {'message': 'successful'}  #: A success_response
 
 
 @api_mod.route("/user/profile")
 @require_login
 @require_json(request=False)
 def user_profile():
+    """
+    Get user profile.
+
+    *** Response ***
+
+    :jsonparam int uid: user's unique id
+    :jsonparam string fullname: full name of the user
+    :jsonparam string email: email address of the user
+    :jsonparam int age: age of the user, used for content access
+    :jsonparam string author_identifier: identifier string for content authors
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
     user = User.query.get(session['user']['uid'])
     if not user:
         raise ResourceIDNotFound()
@@ -35,6 +59,30 @@ def user_profile():
 @api_mod.route("/user/register", methods=["POST"])
 @require_json()
 def user_register():
+    """
+    Register a new user.
+
+    *** Request ***
+
+    :jsonparam string fullname: full name of the user
+    :jsonparam string email: email address of the user
+    :jsonparam string password: user password
+    :jsonparam string author_identifier: identifier string for content authors
+    :jsonparam int age: age of the user, used for content access
+
+    *** Response ***
+
+    :jsonparam int uid: user's unique id
+    :jsonparam string fullname: full name of the user
+    :jsonparam string email: email address of the user
+    :jsonparam int age: age of the user, used for content access
+    :jsonparam string author_identifier: identifier string for content authors
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 409: :py:exc:`.UserAlreadRegistered`
+    """
     # TODO: Register device at user registeration
     req = request.get_json()
     if type(req) is not dict:
@@ -55,6 +103,21 @@ def user_register():
 @api_mod.route("/user/login", methods=["POST"])
 @require_json()
 def user_login():
+    """
+    User login.
+
+    *** Request ***
+
+    :jsonparam string email: email address of the user
+    :jsonparam string password: user password
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 401: :py:exc:`.UserCredentialsDontMatch`
+    """
     # TODO: Check device and verify client.
     req = request.get_json()
     if type(req) is not dict:
@@ -76,8 +139,43 @@ def user_login():
 @api_mod.route("/user/logout")
 @require_json(request=False)
 def user_logout():
+    """
+    User logout.
+    This always returns a 200 OK.
+
+    *** Request ***
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    """
     if session['user'] is not None:
         del session['user']
+    return success_response
+
+
+@api_mod.route("/user/reset_password/<email>")
+@require_json(request=False)
+def user_reset_password(email):
+    """
+    Reset user's password. This will send an email with a new password to user.
+    This always returns a 200 OK.
+
+    *** Request ***
+
+    :jsonparam email: user's email address
+
+    *** Response ***
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    """
+    user = User.query.filter_by(email=email)
+    if not user:
+        return success_response
+    newpwd = generate_password_hash(base64.b64decode(os.urandom(10)))
+    user.password = newpwd
+    # TODO: Send new password to user.
     return success_response
 
 
@@ -85,6 +183,27 @@ def user_logout():
 @require_login
 @require_json()
 def user_update():
+    """
+    Update user's profile.
+
+    *** Request ***
+
+    :jsonparam string fullname: full name of the user
+    :jsonparam int age: age of the user, used for content access
+    :jsonparam string author_identifier: identifier string for content authors
+    :jsonparam string old_password: only used when changing password
+    :jsonparam string new_password: only used when changing password
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 401: :py:exc:`.UserCredentialsDontMatch`
+    :status 400: :py:exc:`.BadJSONData`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
     uid = session['user']['uid']
     user = User.query.get(uid)
     req = request.get_json()
@@ -92,11 +211,23 @@ def user_update():
         req = dict(json.loads(req))
     if not User:
         raise ResourceIDNotFound
-    if not check_password_hash(user.password, req['old_password']):
-        raise UserCredentialsDontMatch
+
+    if req.get('old_password') and req.get('new_password'):
+        # Check old password
+        if not check_password_hash(user.password, req['old_password']):
+            raise UserCredentialsDontMatch
+    elif req.get('old_password') or req.get('new_password'):
+        # Request only contains 'new_password'
+        raise BadJSONData
+
+    pwd = generate_password_hash(req['new_password']) if\
+        req.get('new_password') else user.password
+
     data = dict(
-        fullname=req["fullname"] or user.fullname,
-        password=generate_password_hash(req['new_password'])
+        fullname=req.get("fullname") or user.fullname,
+        age=req.get("age") or user.age,
+        author_identifier=req.get("author_identifier") or user.author_identifier,
+        password=pwd
     )
     with db_scoped_session() as se:
         se.query(User).filter_by(uid=uid).update(data)
@@ -108,6 +239,30 @@ def user_update():
 @require_login
 @require_json()
 def device_add():
+    """
+    Add a new device. Each user can only add up to 5 devices.
+
+    *** Request ***
+
+    :jsonparam string device_name: the name of the device. e.g. Ryan's iPhone
+    :jsonparam string imei: IMEI number of the device
+    :jsonparam string udid: UDID number of the device
+    :jsonparam string model: the model number of the device
+
+    *** Response ***
+
+    :jsonparam int dev_id: the unique ID number of the device
+    :jsonparam int uid: user id of the ownder
+    :jsonparam string device_name: the name of the device. e.g. Ryan's iPhone
+    :jsonparam string imei: IMEI number of the device
+    :jsonparam string udid: UDID number of the device
+    :jsonparam string model: the model number of the device
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:obj:`.UserNotLoggedIn`
+    """
     # TODO: Limit the number of devices can be registered.
     req = request.get_json()
     if type(req) is not dict:
@@ -129,6 +284,27 @@ def device_add():
 @require_login
 @require_json(request=False)
 def device_list(device_id):
+    """
+    Get information of a device.
+
+    *** Request ***
+
+    :queryparam device_id: the unique ID number of the device.
+
+    *** Response ***
+
+    :jsonparam int dev_id: the unique ID number of the device
+    :jsonparam int uid: user id of the ownder
+    :jsonparam string device_name: the name of the device. e.g. Ryan's iPhone
+    :jsonparam string imei: IMEI number of the device
+    :jsonparam string udid: UDID number of the device
+    :jsonparam string model: the model number of the device
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     if device_id:
         device = Device.query\
             .filter_by(uid=session['user']['uid'], dev_id=device_id)\
@@ -148,6 +324,23 @@ def device_list(device_id):
 @api_mod.route("/category/<int:cid>")
 @require_json(request=False)
 def category_list(cid):
+    """
+    Get category information.
+
+    *** Request ***
+
+    :queryparam int cid: unique category ID number
+
+    *** Response ***
+    :jsonparam int cid: category id
+    :jsonparam int parent_id: parent category id
+    :jsonparam string name: name of the category
+    :jsonparam string description: description of the category
+
+    :resheader Content-Type: application/js
+    :status 200: no error :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     if cid:
         category = Category.query.get(cid)
         if not category:
@@ -167,6 +360,21 @@ def category_list(cid):
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json()
 def category_add():
+    """
+    Add a new category. Requires admin privileges.
+
+    *** Request ***
+
+    :jsonparam string name: category name
+    :jsonparam int parent_id: parent category's id
+    :jsonparam string description: description
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -185,6 +393,25 @@ def category_add():
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json()
 def category_update(cid):
+    """
+    Update a category. Requires admin privileges.
+
+    *** Request ***
+
+    :queryparam int cid: category id
+    :jsonparam int parent_id: parent category's id, shouldn't be itself
+    :jsonparam string name: name of the category
+    :jsonparam string description: description of the category
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 409: :py:exc:`.CategorySelfParent`
+    """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -203,6 +430,23 @@ def category_update(cid):
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json(request=False)
 def category_delete(cid):
+    """
+    Delete a category. The category to delete must be empty(no sub-categories or
+    items.
+
+    *** Request ***
+
+    :param int cid: category id
+
+    *** Response ***
+
+    :reqheader Content-Type: application/js
+    :resheader Content-Type: application/js
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 409: :py:exc:`.CategoryNotEmpty`
+    """
     with db_scoped_session() as se:
         category = se.query(Category).get(cid)
         children = se.query(Category).filter_by(parent_id=cid).first()
@@ -219,6 +463,28 @@ def category_delete(cid):
 @require_login
 @require_json(request=False)
 def billing_list(bid):
+    """
+    Get information of billing method `bid`.
+
+    *** Request ***
+
+    :queryparam int bid: billing method ID
+
+    *** Response ***
+
+    :jsonparam int bid: billing method id
+    :jsonparam int uid: user id
+    :jsonparam string address: billing address
+    :jsonparam int zipcode: zipcode
+    :jsonparam string state: state
+    :jsonparam string country: country
+    :jsonparam string type_: payment method type, see :py:class:`.BillingType`
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     if bid:
         billing = BillingInfo.query.get(bid)
         if not billing:
@@ -233,6 +499,29 @@ def billing_list(bid):
 @require_login
 @require_json()
 def billing_add():
+    """
+    Add a new billing method.
+
+    *** Request ***
+
+    :jsonparam string address: billing address
+    :jsonparam int zipcode: zipcode
+    :jsonparam string state: state
+    :jsonparam string country: country
+    :jsonparam string type_: payment method type, see :py:class:`.BillingType`
+    :jsonparam string cc_no: credit card number, `optional`
+    :jsonparam string cc_name: name on the credit card, `optional`
+    :jsonparam string cc_expr: expiration date of the credit card, `optional`
+
+    `cc_expr` must be in 'mm/yy' format.
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -255,6 +544,30 @@ def billing_add():
 @require_login
 @require_json()
 def billing_update(bid):
+    """
+    Update a billing method.
+
+    *** Request ***
+
+    :jsonparam string address: billing address
+    :jsonparam int zipcode: zipcode
+    :jsonparam string state: state
+    :jsonparam string country: country
+    :jsonparam string type_: payment method type
+    :jsonparam string cc_no: credit card number, `optional`
+    :jsonparam string cc_name: name on the credit card, `optional`
+    :jsonparam string cc_expr: expiration date of the credit card, `optional`
+
+    `cc_expr` must be in 'mm/yy' format.
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -278,6 +591,20 @@ def billing_update(bid):
 @require_login
 @require_json(request=False)
 def billing_delete(bid):
+    """
+    Delete a billing method.
+
+    *** Request ***
+
+    :query int bid: billing method id
+
+    *** Response ***
+
+    :resheader Content-Type: applicatioin/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     uid = session['user']['uid']
     with db_scoped_session() as se:
         billing = se.query(BillingInfo).filter_by(bid=bid, uid=uid).first()
@@ -292,6 +619,33 @@ def billing_delete(bid):
 @api_mod.route("/item/<int:iid>")
 @require_json(request=False)
 def item_list(iid):
+    """
+    Get information of an item.
+
+    *** Request ***
+
+    :query int iid: item id
+
+    *** Response ***
+
+    :jsonparam int iid: item id
+    :jsonparam int category_id: category id
+    :jsonparam string author_id: author identifier(not user id)
+    :jsonparam string pkg_name: package name
+    :jsonparam string display_name: display name of the package
+    :jsonparam string pkg_version: package version
+    :jsonparam string pkg_assets_path: the url of preview assets
+    :jsonparam string pkg_dependencies: package dependencies
+    :jsonparam float price: item price
+    :jsonparam string summary: item summary
+    :jsonparam string description: item description
+    :jsonparam string add_date: add date of package
+    :jsonparam string last_update_date: last update date of the package
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     if iid:
         item = Item.query.get(iid)
         if not item:
@@ -306,6 +660,27 @@ def item_list(iid):
 @require_login
 @require_json()
 def item_add():
+    """
+    Add a new item.
+
+    *** Request ***
+
+    :jsonparam int category_id: category id
+    :jsonparam string pkg_name: package name
+    :jsonparam string display_name: display name of the package
+    :jsonparam string pkg_version: package version
+    :jsonparam string pkg_dependencies: package dependencies
+    :jsonparam float price: item price
+    :jsonparam string summary: item summary
+    :jsonparam string description: item description
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -328,6 +703,29 @@ def item_add():
 @require_login
 @require_json()
 def item_update(iid):
+    """
+    Update an item.
+
+    *** Request ***
+
+    :query iid: item id
+    :jsonparam int category_id: category id
+    :jsonparam string pkg_name: package name
+    :jsonparam string display_name: display name of the package
+    :jsonparam string pkg_version: package version
+    :jsonparam string pkg_dependencies: package dependencies
+    :jsonparam float price: item price
+    :jsonparam string summary: item summary
+    :jsonparam string description: item description
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -344,6 +742,20 @@ def item_update(iid):
 @require_login
 @require_json(request=False)
 def item_delete(iid):
+    """
+    Delete an item.
+
+    *** Request ***
+
+    :query int iid: item id
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     author_id = session['user']['author_identifier']
     role = session['user']['role']
     with db_scoped_session() as se:
@@ -363,6 +775,37 @@ def item_delete(iid):
 @require_login
 @require_json()
 def order_add():
+    """
+    Place a new order.
+
+    *** Request ***
+
+    :jsonparam int billing_id: the id of billing method
+    :jsonparam int item_id: item id
+    :jsonparam int quantity: `optional`, default is 1
+    :jsonparam string currency: `optional`, currency of the payment
+    :jsonparam float total_price: total price of the items
+    :jsonparam float total_charged: total charged, including tax and other fees
+
+    *** Response ***
+
+    :jsonparam int oid: order id
+    :jsonparam int uid: user id
+    :jsonparam string pkg_name: package name
+    :jsonparam int quantity: quantity
+    :jsonparam string currency: currency
+    :jsonparam int status: order status, :py:class:`.OrderStatus`
+    :jsonparam int billing_id: billing method id
+    :jsonparam float total_price: total price
+    :jsonparam float total_charged: total charged
+    :jsonparam string order_date: the date of order placed
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 403: :py:exc:`.ResourceIDNotFound`
+    """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -387,6 +830,33 @@ def order_add():
 @require_login
 @require_json(request=False)
 def order_list(oid):
+    """
+    Get information of an order.
+
+    *** Request ***
+
+    :param int oid: order id
+
+    *** Response ***
+
+
+    :jsonparam int oid: order id
+    :jsonparam int uid: user id
+    :jsonparam string pkg_name: package name
+    :jsonparam int quantity: quantity
+    :jsonparam string currency: currency
+    :jsonparam int status: order status, :py:class:`.OrderStatus`
+    :jsonparam int billing_id: billing method id
+    :jsonparam float total_price: total price
+    :jsonparam float total_charged: total charged
+    :jsonparam string order_date: the date of order placed
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
     uid = session['user']['uid']
     if oid:
         order = Order.query.get(oid)
@@ -406,6 +876,28 @@ def order_list(oid):
 @require_login
 @require_json()
 def order_udpate(oid):
+    """
+    Update an uncomplete order. Notice: an complete order cannot be changed.
+
+    *** Request ***
+
+    :param int oid: order id
+    :jsonparam int billing_id: the id of billing method
+    :jsonparam int quantity: `optional`, default is 1
+    :jsonparam string currency: `optional`, currency of the payment
+    :jsonparam float total_price: total price of the items
+    :jsonparam float total_charged: total charged, including tax and other fees
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 401: :py:exc:`.OrderNotChangable`
+    """
     uid = session['user']['uid']
     order = Order.query.get(oid)
     if not order:
@@ -415,12 +907,33 @@ def order_udpate(oid):
     if order.status != OrderStatus.OrderPlaced:
         raise OrderNotChangable()
 
+    order.update(req)
+    return success_response
+
 
 @api_mod.route("/order/<int:oid>/cancel")
 @require_login
 @require_json(request=False)
 def order_cancel(oid):
+    """
+    Cancel an order.
+
+    *** Request ***
+
+    :param int oid: order id
+
+    *** Response ***
+
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 401: :py:exc:`.OrderNotChangable`
+    """
     order = Order.query.get(oid)
+    if order.status == OrderStatus.OrderCompleted:
+        raise OrderNotChangable
     if not order:
         raise ResourceIDNotFound()
     with db_scoped_session() as se:

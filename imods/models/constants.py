@@ -1,4 +1,5 @@
-""" Constants used by other modules. """
+""" Constants and enumerations used by other modules.
+"""
 
 
 class BillingType:

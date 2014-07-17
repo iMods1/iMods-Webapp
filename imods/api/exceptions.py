@@ -68,17 +68,17 @@ class BadURLRequest(APIException):
 
 
 class UserNotFound(InternalException):
-    status_code = 500
+    status_code = 404
     message = 'Internal Error'
 
 
 class ResourceIDNotFound(InternalException):
-    status_code = 500
+    status_code = 404
     message = 'Recource ID is not found'
 
 
 class InsufficientPrivileges(APIException):
-    status_code = 403
+    status_code = 405
     message = 'Not authenticated to perform this operation.'
 
 
