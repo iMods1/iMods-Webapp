@@ -1,11 +1,12 @@
 import os
 
 # Abs path of current file
-basedir = '/var/db/imods.wunderkind.us'
+basedir = os.environ.get('IMODS_DB_DIR') or '/var/db/imods.wunderkind.us'
 
-DEBUG = FALSE
+DEBUG = False
 
-ADMINS = frozenset(['odayfans@gmail.com'])
+DEFAULT_ADMINS = [os.environ.get('IMODS_DEFAULT_ADMIN', '')]
+ADMINS = frozenset(DEFAULT_ADMINS)
 SECRET_KEY = 'h\xcf\x08MW\x8d"\xde\xe5\xc1V\'\xa8(\x96\x910v\x14\x12#\xa1\x91K'
 
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')

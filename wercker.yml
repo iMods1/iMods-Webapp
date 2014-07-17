@@ -82,7 +82,7 @@ deploy:
 
         - script:
             name: starting application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true IMODS_CONFIG=$IMODS_CONFIG VENV_DIR=$VENV_DIR ./deploy.sh start deploy"
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true IMODS_DEFAULT_ADMIN=$IMODS_DEFAULT_ADMIN IMODS_CONFIG=$IMODS_CONFIG VENV_DIR=$VENV_DIR ./deploy.sh start deploy"
 
         - script:
             name: clean builds
