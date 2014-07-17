@@ -77,7 +77,7 @@ main(){
             rm $TEMP_REQUIREMENT_PATH
             ;;
         test)
-            python -m unittest discover tests
+            python -m unittest discover -v tests
             ;;
         *) usage;;
     esac

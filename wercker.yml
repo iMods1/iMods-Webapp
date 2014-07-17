@@ -15,8 +15,6 @@ build:
         - script:
             name: running tests
             code: |
-                ls -al
-                ls -al imods/configs
                 ./deploy.sh test
 
 deploy:
