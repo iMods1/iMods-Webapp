@@ -8,7 +8,9 @@ DEBUG = True
 ADMINS = frozenset(['odayfans@gmail.com'])
 SECRET_KEY = 'somescretkey'  # Replace this in production
 
-SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'imods.db')
+SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')
+
+SQLALCHEMY_DATABASE_URI = 'sqlite:///' + SQLITE_DB_PATH
 DATABASE_CONNECT_OPTIONS = {}
 
 CSRF_ENABLED = True
