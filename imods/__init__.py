@@ -1,9 +1,10 @@
 from flask import Flask
 from flask.ext.sqlalchemy import SQLAlchemy
-import config
+import os
+os.path.append('')
 
 app = Flask(__name__)
-app.config.from_object(config)
+app.config.from_object('config')
 
 db = SQLAlchemy(app)
 
