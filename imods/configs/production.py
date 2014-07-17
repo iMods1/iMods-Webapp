@@ -1,5 +1,4 @@
 import os
-from imods import init_db
 
 # Abs path of current file
 basedir = os.environ.get('IMODS_DB_DIR') or '/var/db/imods.wunderkind.us'
