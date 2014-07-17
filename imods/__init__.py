@@ -18,9 +18,14 @@ db = SQLAlchemy(app)
 
 
 def init_db():
-    if (not app.config["DEBUG"]) and \
-            (not os.path.isfile(app.config['SQLITE_DB_PATH'])):
+    # Only create db file in testing and production, when the file is not
+    # created.
+    if app.config["TESTING"] or \
+            not os.path.isfile(app.config["SQLITE_DB_PATH"]):
         db.create_all()
+    elif app.config["DEBUG"]:
+        # Do nothing in debug mode
+        pass
 
 
 def drop_db():
