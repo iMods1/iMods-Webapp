@@ -6,12 +6,12 @@ app = Flask(__name__)
 
 # This is needed when testing by wercker CI, otherwise, 'config' object won't be
 # found.
-CONFIG_FILE = os.environ.get('IMODS_CONFIG_FILE_PATH')
+CONFIG_OBJECT = os.environ.get('IMODS_CONFIG')
 
-if CONFIG_FILE is not None:
-    app.config.from_pyfile(CONFIG_FILE)
+if CONFIG_OBJECT is not None:
+    app.config.from_object('imods.configs.%s' % CONFIG_OBJECT)
 else:
-    app.config.from_object('config')
+    app.config.from_object('imods.configs.development')
 
 db = SQLAlchemy(app)
 
