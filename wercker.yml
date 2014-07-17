@@ -78,7 +78,7 @@ deploy:
                 ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "mkdir ~/app; tar zxv -C ~/app -f ~/`basename $PACKAGE_PATH`"
         - script:
             name: deploying application on remote host
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true ./deploy.sh init"
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true VENV_DIR=$VENV_DIR ./deploy.sh init"
 
         - script:
             name: starting application
