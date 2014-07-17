@@ -15,7 +15,7 @@ build:
         - script:
             name: running tests
             code: |
-                ./deploy.sh test
+                IMODS_CONFIG=configs.development ./deploy.sh test
 
 deploy:
     steps:

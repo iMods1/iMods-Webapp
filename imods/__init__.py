@@ -9,7 +9,7 @@ app = Flask(__name__)
 CONFIG_OBJECT = os.environ.get('IMODS_CONFIG')
 
 if CONFIG_OBJECT is not None:
-    app.config.from_object('imods.configs.%s' % CONFIG_OBJECT)
+    app.config.from_object('%s' % CONFIG_OBJECT)
 else:
     app.config.from_object('imods.configs.development')
 
