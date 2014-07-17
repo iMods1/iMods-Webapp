@@ -14,7 +14,7 @@ build:
         - script:
             name: running tests
             code: |
-                echo "test script goes here"
+                ./deploy.sh test
 
 deploy:
     steps:

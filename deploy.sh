@@ -76,6 +76,9 @@ main(){
             pip install -r $TEMP_REQUIREMENT_PATH
             rm $TEMP_REQUIREMENT_PATH
             ;;
+        test)
+            python -m unittest discover tests
+            ;;
         *) usage;;
     esac
 }
