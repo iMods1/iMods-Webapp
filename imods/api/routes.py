@@ -35,8 +35,9 @@ def user_profile():
 @api_mod.route("/user/register", methods=["POST"])
 @require_json()
 def user_register():
+    # TODO: Register device at user registeration
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     found = User.query.filter_by(email=req["email"]).first()
     if found:
@@ -54,8 +55,9 @@ def user_register():
 @api_mod.route("/user/login", methods=["POST"])
 @require_json()
 def user_login():
+    # TODO: Check device and verify client.
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     user = User.query.filter_by(email=req["email"]).first()
     if user and check_password_hash(user.password, req["password"]):
@@ -86,7 +88,7 @@ def user_update():
     uid = session['user']['uid']
     user = User.query.get(uid)
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     if not User:
         raise ResourceIDNotFound
@@ -106,8 +108,9 @@ def user_update():
 @require_login
 @require_json()
 def device_add():
+    # TODO: Limit the number of devices can be registered.
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     user = session['user']
     dev_name = req['device_name']
@@ -165,7 +168,7 @@ def category_list(cid):
 @require_json()
 def category_add():
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     cat_name = req['name']
     cat_parent_id = req.get('parent_id')
@@ -183,7 +186,7 @@ def category_add():
 @require_json()
 def category_update(cid):
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     if req.get("parent_id") and req["parent_id"] == cid:
         raise CategorySelfParent
@@ -231,7 +234,7 @@ def billing_list(bid):
 @require_json()
 def billing_add():
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     uid = session['user']['uid']
     if req.get('cc_expr'):
@@ -304,7 +307,7 @@ def item_list(iid):
 @require_json()
 def item_add():
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     author_id = req.get("author_id") or session['user']['author_identifier']
     item = Item(req['pkg_name'],
@@ -326,7 +329,7 @@ def item_add():
 @require_json()
 def item_update(iid):
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     item = Item.query.get(iid)
     if not item:
@@ -361,7 +364,7 @@ def item_delete(iid):
 @require_json()
 def order_add():
     req = request.get_json()
-    if type(req) is not type(dict()):
+    if type(req) is not dict:
         req = dict(json.loads(req))
     user = User.query.get(session['user']['uid'])
     billing = BillingInfo.query.get(req['billing_id'])
