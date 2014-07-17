@@ -1,10 +1,17 @@
 from flask import Flask
 from flask.ext.sqlalchemy import SQLAlchemy
-import sys
-sys.path.append('..')
+import os
 
 app = Flask(__name__)
-app.config.from_object('config')
+
+# This is needed when testing by wercker CI, otherwise, 'config' object won't be
+# found.
+CONFIG_FILE = os.environ.get('IMODS_CONFIG_FILE_PATH')
+
+if CONFIG_FILE is not None:
+    app.config.from_pyfile(CONFIG_FILE)
+else:
+    app.config.from_object('config')
 
 db = SQLAlchemy(app)
 
