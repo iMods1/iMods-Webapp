@@ -18,7 +18,8 @@ db = SQLAlchemy(app)
 
 
 def init_db():
-    db.create_all()
+    if not os.isfile(app.config['SQLITE_DB_PATH']):
+        db.create_all()
 
 
 def drop_db():
@@ -26,3 +27,5 @@ def drop_db():
 
 from imods.api.routes import api_mod
 app.register_blueprint(api_mod)
+
+init_db()

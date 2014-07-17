@@ -11,9 +11,6 @@ ADMINS = frozenset(DEFAULT_ADMINS)
 SECRET_KEY = 'h\xcf\x08MW\x8d"\xde\xe5\xc1V\'\xa8(\x96\x910v\x14\x12#\xa1\x91K'
 
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')
-# Create db file
-if not os.path.isfile(SQLITE_DB_PATH):
-    init_db()
 
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + SQLITE_DB_PATH
 DATABASE_CONNECT_OPTIONS = {}
