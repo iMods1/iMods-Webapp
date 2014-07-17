@@ -15,7 +15,8 @@ build:
         - script:
             name: running tests
             code: |
-                IMODS_CONFIG=configs.development ./deploy.sh test
+                export IMODS_CONFIG_FILE=$WERCKER_SOURCE_DIR/imods/configs/development.py
+                ./deploy.sh test
 
 deploy:
     steps:
