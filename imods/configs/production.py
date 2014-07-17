@@ -1,4 +1,5 @@
 import os
+from imods import init_db
 
 # Abs path of current file
 basedir = os.environ.get('IMODS_DB_DIR') or '/var/db/imods.wunderkind.us'
@@ -12,7 +13,6 @@ SECRET_KEY = 'h\xcf\x08MW\x8d"\xde\xe5\xc1V\'\xa8(\x96\x910v\x14\x12#\xa1\x91K'
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')
 # Create db file
 if not os.path.isfile(SQLITE_DB_PATH):
-    from imods import init_db
     init_db()
 
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + SQLITE_DB_PATH
