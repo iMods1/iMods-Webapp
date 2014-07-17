@@ -47,7 +47,7 @@ main(){
                     uwsgi --ini $CONFIG:dev
                     ;;
                 deploy)
-                    VENV_DIR=$VENV_DIR uwsgi --ini $CONFIG:deploy
+                    IMODS_CONFIG=imods.configs.production VENV_DIR=$VENV_DIR uwsgi --ini $CONFIG:deploy
                     ;;
                 *)
                     uwsgi --ini $CONFIG:$TARGET
