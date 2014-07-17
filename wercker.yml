@@ -17,7 +17,6 @@ build:
             code: |
                 ls -al
                 ls -al imods/configs
-                export IMODS_CONFIG_FILE=$WERCKER_SOURCE_DIR/imods/configs/development.py
                 ./deploy.sh test
 
 deploy:
