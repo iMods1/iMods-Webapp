@@ -12,13 +12,14 @@ check_deploy_env(){
 }
 
 main(){
+    VENV_DIR=${VENV_DIR-venv}
     case "$1" in
         package)
             BUILD_DIR=builds
             BUILD_NAME=`TZ='America/New York' date +%F_%H-%M-%S`.tar.gz
             BUILD_PATH=$BUILD_DIR/$BUILD_NAME
             [ ! -d ./packages ] && mkdir $BUILD_DIR
-            tar zvc ./deploy.sh ./config.py ./imods ./uwsgi.ini ./requirements.txt -f "${2-$BUILD_PATH}"
+            tar zvc ./deploy.sh ./imods ./uwsgi.ini ./requirements.txt -f "${2-$BUILD_PATH}"
             echo ${2-$BUILD_PATH}
             ;;
         unpackage)
@@ -46,7 +47,7 @@ main(){
                     uwsgi --ini $CONFIG:dev
                     ;;
                 deploy)
-                    uwsgi --ini $CONFIG:deploy
+                    VENV_DIR=$VENV_DIR IMODS_DB_DIR=$IMODS_DB_DIR IMODS_DEFAULT_ADMIN=$IMODS_DEFAULT_ADMIN uwsgi --ini $CONFIG:deploy
                     ;;
                 *)
                     uwsgi --ini $CONFIG:$TARGET
@@ -66,8 +67,8 @@ main(){
             check_deploy_env
             cd ~/app
             echo "Creating virtualenv in ~/app..."
-            virtualenv venv
-            source venv/bin/activate
+            virtualenv ${VENV_DIR-venv}
+            source $VENV_DIR/bin/activate
             echo "Installing packages using pip..."
             TEMP_REQUIREMENT_PATH=`mktemp`
             # Skip compiling and installing uwsgi, because it's slow
@@ -77,7 +78,7 @@ main(){
             rm $TEMP_REQUIREMENT_PATH
             ;;
         test)
-            python -m unittest discover tests
+            python -m unittest discover -v tests
             ;;
         *) usage;;
     esac
