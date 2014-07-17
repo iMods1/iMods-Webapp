@@ -18,7 +18,8 @@ db = SQLAlchemy(app)
 
 
 def init_db():
-    if app.config["DEBUG"] or not os.path.isfile(app.config['SQLITE_DB_PATH']):
+    if (not app.config["DEBUG"]) and \
+            (not os.path.isfile(app.config['SQLITE_DB_PATH'])):
         db.create_all()
 
 
