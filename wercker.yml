@@ -21,7 +21,7 @@ deploy:
     steps:
         - add-to-known_hosts:
             hostname: imods.wunderkind.us
-            fingerprint: 8c:2d:c2:d3:13:10:79:47:45:c3:da:60:5e:12:b1:14
+            fingerprint: d0:28:e7:cf:ac:2c:a7:d8:b2:25:03:cb:be:5b:65:da
 
         - mktemp:
             name: creating temporary private key
