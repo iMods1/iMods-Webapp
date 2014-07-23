@@ -47,7 +47,12 @@ main(){
                     uwsgi --ini $CONFIG:dev
                     ;;
                 deploy)
-                    VENV_DIR=$VENV_DIR IMODS_DB_DIR=$IMODS_DB_DIR IMODS_DEFAULT_ADMIN=$IMODS_DEFAULT_ADMIN uwsgi --ini $CONFIG:deploy
+                    check_deploy_env
+                    VENV_DIR=${VENV_DIR-venv}
+                    IMODS_DB_DIR=${IMODS_DB_DIR-/var/db/imods.wunderkind.us}
+                    IMODS_DEFAULT_ADMIN=${IMODS_DEFAULT_ADMIN-}
+                    IMODS_CONFIG=${IMODS_CONFIG-imods.configs.production}
+                    uwsgi --ini $CONFIG:deploy
                     ;;
                 *)
                     uwsgi --ini $CONFIG:$TARGET

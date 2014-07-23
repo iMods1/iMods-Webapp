@@ -21,7 +21,7 @@ deploy:
     steps:
         - add-to-known_hosts:
             hostname: imods.wunderkind.us
-            fingerprint: 8c:2d:c2:d3:13:10:79:47:45:c3:da:60:5e:12:b1:14
+            fingerprint: d0:28:e7:cf:ac:2c:a7:d8:b2:25:03:cb:be:5b:65:da
 
         - mktemp:
             name: creating temporary private key
@@ -78,11 +78,11 @@ deploy:
                 ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "mkdir ~/app; tar zxv -C ~/app -f ~/`basename $PACKAGE_PATH`"
         - script:
             name: deploying application on remote host
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true VENV_DIR=$VENV_DIR ./deploy.sh init"
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true ./deploy.sh init"
 
         - script:
             name: starting application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true IMODS_DEFAULT_ADMIN=$IMODS_DEFAULT_ADMIN IMODS_CONFIG=$IMODS_CONFIG VENV_DIR=$VENV_DIR ./deploy.sh start deploy"
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true ./deploy.sh start deploy"
 
         - script:
             name: clean builds
