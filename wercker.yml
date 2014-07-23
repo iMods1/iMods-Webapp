@@ -66,7 +66,7 @@ deploy:
 
         - script:
             name: stopping application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'pgrep uwsgi && pkill -INT uwsgi || echo'
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'supervisorctl stop imods:imods_server_production'
 
         - script:
             name: cleanning remote environment
@@ -82,7 +82,7 @@ deploy:
 
         - script:
             name: starting application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true ./deploy.sh start deploy"
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "supervisorctl start imods:imods_server_production"
 
         - script:
             name: clean builds
