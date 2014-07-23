@@ -66,7 +66,7 @@ deploy:
 
         - script:
             name: stopping application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'pgrep uwsgi && pkill -INT uwsgi || echo'
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'supervisorctl stop imods:imods_server_production'
 
         - script:
             name: cleanning remote environment
@@ -78,11 +78,11 @@ deploy:
                 ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "mkdir ~/app; tar zxv -C ~/app -f ~/`basename $PACKAGE_PATH`"
         - script:
             name: deploying application on remote host
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true VENV_DIR=$VENV_DIR ./deploy.sh init"
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true ./deploy.sh init"
 
         - script:
             name: starting application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true IMODS_DEFAULT_ADMIN=$IMODS_DEFAULT_ADMIN IMODS_CONFIG=$IMODS_CONFIG VENV_DIR=$VENV_DIR ./deploy.sh start deploy"
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "supervisorctl start imods:imods_server_production"
 
         - script:
             name: clean builds
