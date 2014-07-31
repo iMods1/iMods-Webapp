@@ -1,3 +1,4 @@
+-- This schema is manually generated from sqlite dump, it might be out of date.
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
 CREATE TABLE "USER" (
