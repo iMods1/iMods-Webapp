@@ -10,9 +10,9 @@ from werkzeug import check_password_hash, generate_password_hash
 from imods.models import User, Order, Item, Device, Category, BillingInfo
 from imods.models import UserRole, OrderStatus
 from imods.models.mixin import JSONSerialize
-from imods.api.decorators import require_login, require_json
-from imods.api.decorators import require_privileges
-from imods.api.helpers import db_scoped_session
+from imods.decorators import require_login, require_json
+from imods.decorators import require_privileges
+from imods.helpers import db_scoped_session
 from imods.api.exceptions import setup_api_exceptions
 from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
@@ -132,7 +132,7 @@ def user_login():
                      'role': user.role,
                      'private_key': user.private_key}
         session['user'] = user_dict
-        return success_response
+        return user.get_public()
     raise UserCredentialsDontMatch()
 
 
