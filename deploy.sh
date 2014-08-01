@@ -39,7 +39,6 @@ main(){
         start)
             TARGET=${2-dev}
             CONFIG=${3-uwsgi.ini}
-            python -c 'from imods import app,db;from imods.db import add_admins_to_db; add_admins_to_db(app,db);print "ok"'
             case "$TARGET" in
                 dev)
                     python ./run.py
@@ -81,6 +80,7 @@ main(){
             grep -v 'uWSGI==' requirements.txt > $TEMP_REQUIREMENT_PATH
             pip install -r $TEMP_REQUIREMENT_PATH
             rm $TEMP_REQUIREMENT_PATH
+            python -c 'from imods import app,db;from imods.db import add_admins_to_db; add_admins_to_db(app,db);print "ok"'
             ;;
         test)
             python -m unittest discover -v tests
