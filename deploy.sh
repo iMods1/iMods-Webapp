@@ -39,6 +39,7 @@ main(){
         start)
             TARGET=${2-dev}
             CONFIG=${3-uwsgi.ini}
+            python -c 'from imods import app,db;from imods.db import add_admins_to_db; add_admins_to_db(app,db);print "ok"'
             case "$TARGET" in
                 dev)
                     python ./run.py
@@ -50,7 +51,6 @@ main(){
                     check_deploy_env
                     VENV_DIR=${VENV_DIR-venv}\
                     IMODS_DB_DIR=${IMODS_DB_DIR-/var/db/imods.wunderkind.us}\
-                    IMODS_DEFAULT_ADMIN=${IMODS_DEFAULT_ADMIN-}\
                     IMODS_CONFIG=${IMODS_CONFIG-imods.configs.production}\
                     uwsgi --ini $CONFIG:deploy
                     ;;
