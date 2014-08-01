@@ -7,7 +7,7 @@ DEBUG = True
 
 ADMINS = [
     {
-        'email': 'admin@test.com',
+        'email': 'test@test.com',
         'password': 'test'
     }
 ]
