@@ -13,10 +13,8 @@ class Category(db.Model, JSONSerialize):
     description = db.Column(db.String(2000))
 
     children = db.relationship("Category",
-                               backref=db.backref("parents"),
-                               remote_side=[cid],
-                               lazy="joined",
-                               join_depth=3)
+                               backref=db.backref("parent", remote_side=[cid]),
+                               )
 
     items = db.relationship("Item", backref="category", lazy="dynamic")
 
