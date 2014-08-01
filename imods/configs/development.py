@@ -5,7 +5,12 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 DEBUG = True
 
-ADMINS = frozenset(['odayfans@gmail.com'])
+ADMINS = [
+    {
+        'email': 'test@test.com',
+        'password': 'test'
+    }
+]
 SECRET_KEY = 'somescretkey'  # Replace this in production
 
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')

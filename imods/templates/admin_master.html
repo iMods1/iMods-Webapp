@@ -1,0 +1,14 @@
+{% extends 'admin/base.html' %}
+
+{% block access_control %}
+{% if session.get('user') %}
+<div class="btn-group pull-right">
+    <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+        <i class="icon-user"></i> {{ session['user']['fullname'] }} <span class="caret"></span>
+    </a>
+    <ul class="dropdown-menu">
+        <li><a href="{{ url_for('admin.logout_view') }}">Log out</a></li>
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

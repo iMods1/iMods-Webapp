@@ -41,24 +41,6 @@ class Item(db.Model, JSONSerialize):
     last_update_date = db.Column(db.Date(), default=datetime.utcnow,
                                  onupdate=datetime.utcnow, nullable=False)
 
-    def __init__(self, pkg_name, pkg_version, display_name, **kwargs):
-        author = kwargs.get('author')
-        author_id = kwargs.get('author_id')
-        self.author_id = author.author_identifier if author else author_id
-        self.pkg_name = pkg_name
-        self.pkg_version = pkg_version
-        self.display_name = display_name
-        self.pkg_signature = kwargs.get('pkg_signature')
-        self.pkg_path = kwargs.get('pkg_parth')
-        self.pkg_assets_path = kwargs.get('pkg_preview_assets')
-        self.summary = kwargs.get('summary')
-        self.description = kwargs.get('description')
-        self.pkg_dependencies = kwargs.get('pkg_dependencies')
-        price = kwargs.get('price')
-        if not price or price < 0.01:
-            price = db.NULL
-        self.price = price
-
     def dependencies(self):
         return "<Dependencies: %r>" % (self.pkg_dependencies)
 

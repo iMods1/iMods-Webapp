@@ -13,12 +13,5 @@ class Device(db.Model, JSONSerialize):
     UDID = db.Column(db.String(200), nullable=False)
     model = db.Column(db.String(100), nullable=False)
 
-    def __init__(self, user_id, device_name, IMEI, UDID, model):
-        self.uid = user_id
-        self.device_name = device_name
-        self.IMEI = IMEI
-        self.UDID = UDID
-        self.model = model
-
     def __repr__(self):
         return "<Device '%r': %r>" % (self.device_name, self.owner)
