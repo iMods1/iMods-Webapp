@@ -17,6 +17,7 @@ if CONFIG_FILE is not None:
 else:
     app.config.from_object(CONFIG_OBJECT)
 
+
 db = SQLAlchemy(app)
 
 
@@ -27,14 +28,15 @@ def init_db():
             not os.path.isfile(app.config["SQLITE_DB_PATH"]):
         db.create_all()
     elif app.config["DEBUG"]:
-        # Do nothing in debug mode
         pass
 
 
-def drop_db():
+def drop_db(db):
     db.drop_all()
 
 from imods.api.routes import api_mod
+from imods.admin.views import imods_admin
 app.register_blueprint(api_mod)
+imods_admin.init_app(app)
 
 init_db()

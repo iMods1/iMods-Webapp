@@ -17,8 +17,9 @@ from imods.api.exceptions import setup_api_exceptions
 from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
 from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
-from imods.api.exceptions import CategorySelfParent
+from imods.api.exceptions import CategorySelfParent, BadJSONData
 from datetime import datetime
+import os
 import operator
 import base64
 
@@ -91,9 +92,10 @@ def user_register():
     if found:
         raise UserAlreadRegistered()
 
-    newuser = User(req["fullname"], req["email"],
-                   generate_password_hash(req["password"]),
-                   "privatekey", req["age"], "author_identifier")
+    newuser = User(fullname=req["fullname"], email=req["email"],
+                   password=generate_password_hash(req["password"]),
+                   private_key="privatekey", age=req["age"],
+                   author_identifier="author_identifier")
     with db_scoped_session() as se:
         se.add(newuser)
         se.commit()
@@ -272,7 +274,11 @@ def device_add():
     dev_imei = req['imei']
     dev_udid = req['udid']
     dev_model = req['model']
-    device = Device(user['uid'], dev_name, dev_imei, dev_udid, dev_model)
+    device = Device(uid=user['uid'],
+                    device_name=dev_name,
+                    IMEI=dev_imei,
+                    UDID=dev_udid,
+                    model=dev_model)
     with db_scoped_session() as se:
         se.add(device)
         se.commit()
@@ -382,7 +388,9 @@ def category_add():
     cat_parent_id = req.get('parent_id')
     cat_description = req.get('description', '')
     with db_scoped_session() as se:
-        category = Category(cat_name, cat_description, parent_id=cat_parent_id)
+        category = Category(name=cat_name,
+                            description=cat_description,
+                            parent_id=cat_parent_id)
         se.add(category)
         se.commit()
         return category.get_public()
@@ -530,10 +538,15 @@ def billing_add():
         cc_expr = datetime.strptime(req['cc_expr'], '%d/%y')
     else:
         cc_expr = None
-    billing = BillingInfo(uid, req['address'], req['zipcode'], req['state'],
-                          req['country'], req['type_'], req.get('cc_no'),
-                          req.get('cc_name'),
-                          cc_expr)
+    billing = BillingInfo(uid=uid,
+                          address=req['address'],
+                          zipcode=req['zipcode'],
+                          state=req['state'],
+                          country=req['country'],
+                          type_=req['type_'],
+                          cc_no=req.get('cc_no'),
+                          cc_name=req.get('cc_name'),
+                          cc_expr=cc_expr)
     with db_scoped_session() as se:
         se.add(billing)
         se.commit()
@@ -685,9 +698,9 @@ def item_add():
     if type(req) is not dict:
         req = dict(json.loads(req))
     author_id = req.get("author_id") or session['user']['author_identifier']
-    item = Item(req['pkg_name'],
-                req['pkg_version'],
-                req['display_name'],
+    item = Item(pkg_name=req['pkg_name'],
+                pkg_version=req['pkg_version'],
+                display_name=req['display_name'],
                 author_id=author_id,
                 price=req.get('price'),
                 summary=req.get('summary'),
@@ -809,16 +822,26 @@ def order_add():
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
-    user = User.query.get(session['user']['uid'])
-    billing = BillingInfo.query.get(req['billing_id'])
-    item = Item.query.get(req['item_id'])
+    uid = session['user']['uid']
+    try:
+        billing_id = req['billing_id']
+        item_id = req['item_id']
+    except KeyError:
+        raise BadJSONData
     quantity = req.get("quantity") or 1
     currency = req.get("currency") or "USD"
-    if not item or not billing:
-        raise ResourceIDNotFound()
-    order = Order(user, item, billing, req['total_price'],
-                  quantity=quantity, currency=currency,
-                  total_charged=req['total_charged'])
+    item = Item.query.get(item_id)
+    if not item:
+        raise ResourceIDNotFound
+    try:
+        order = Order(uid=uid,
+                      billing_id=billing_id,
+                      pkg_name=item.pkg_name,
+                      quantity=quantity, currency=currency,
+                      total_price=req['total_price'],
+                      total_charged=req['total_charged'])
+    except:
+        raise
     with db_scoped_session() as se:
         se.add(order)
         se.commit()
@@ -900,6 +923,7 @@ def order_udpate(oid):
     """
     uid = session['user']['uid']
     order = Order.query.get(oid)
+    req = request.get_json()
     if not order:
         raise ResourceIDNotFound
     if order.uid != uid:

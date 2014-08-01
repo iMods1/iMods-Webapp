@@ -26,15 +26,6 @@ class Order(db.Model, JSONSerialize):
 
     billing = db.relationship(BillingInfo)
 
-    def __init__(self, user, item, billing, total_price=None, **kwargs):
-        self.uid = user.uid if user else kwargs.get('user_id')
-        self.pkg_name = item.pkg_name if item else kwargs.get('pkg_name')
-        self.billing_id = billing.bid if billing else kwargs.get('billing_id')
-        self.quantity = kwargs.get("quantity", 1)
-        self.currency = kwargs.get("currency", "USD")
-        self.total_price = total_price
-        self.total_charged = kwargs.get("total_charged")
-
     def __repr__(self):
         return "<Order: UserID '%r' Item '%r' Quantity %r Total %r>" %\
             (self.uid, self.pkg_name, self.quantity, self.total_price)

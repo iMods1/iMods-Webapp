@@ -28,7 +28,7 @@ class User(db.Model, JSONSerialize):
     # One to many relationship, if the user is deleted, all devices
     # registered under the account are deleted as well
     devices = db.relationship(Device,
-                              backref="devices",
+                              backref="owner",
                               cascade="all,delete-orphan")
 
     billing_methods = db.relationship(BillingInfo,
@@ -42,15 +42,6 @@ class User(db.Model, JSONSerialize):
     orders = db.relationship(Order,
                              backref="user",
                              cascade="all,delete-orphan")
-
-    def __init__(self, fullname, email, password, private_key=None,
-                 age=None, author_identifier=None):
-        self.fullname = fullname
-        self.email = email
-        self.password = password
-        self.age = age
-        self.private_key = private_key
-        self.author_identifier = author_identifier
 
     def __repr__(self):
         return "<User %r(%r uid=%r)>" % (self.fullname, self.email, self.uid)

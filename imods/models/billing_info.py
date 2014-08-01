@@ -20,20 +20,6 @@ class BillingInfo(db.Model, JSONSerialize):
     cc_expr = db.Column(db.Date)
     cc_name = db.Column(db.String(200))
 
-    def __init__(self, uid, address, zipcode, state, country,
-                 type_=BillingType.creditcard,
-                 cc_no=None, cc_name=None,
-                 cc_expr=None):
-        self.uid = uid
-        self.type_ = type_
-        self.address = address
-        self.zipcode = zipcode
-        self.state = state
-        self.country = country
-        self.cc_no = cc_no
-        self.cc_name = cc_name
-        self.cc_expr = cc_expr
-
     def __repr__(self):
         # Don't print out any information other than billing type
         return "<Billing Type:%r>" % (self.type_)
