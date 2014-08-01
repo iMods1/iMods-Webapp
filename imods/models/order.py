@@ -3,6 +3,7 @@ from datetime import datetime
 from imods.models.mixin import JSONSerialize
 from imods.models.billing_info import BillingInfo
 from imods.models.constants import OrderStatus
+from imods.models.item import Item
 
 
 class Order(db.Model, JSONSerialize):
@@ -23,6 +24,7 @@ class Order(db.Model, JSONSerialize):
                        nullable=False)
     total_charged = db.Column(db.Float, nullable=True)
     order_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    item = db.relationship(Item)
 
     billing = db.relationship(BillingInfo)
 
