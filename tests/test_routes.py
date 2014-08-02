@@ -30,11 +30,12 @@ class TestRoutes(unittest.TestCase):
         return server.post(url, data=json.dumps(data),
                            content_type="application/json")
 
-    def user_register(self, server, name, email, pwd, age):
+    def user_register(self, server, name, email, pwd, age, author_id=None):
         data = json.dumps(dict(
             fullname=name,
             email=email,
             password=pwd,
+            author_id=author_id or email,
             age=int(age)
         ))
         return self.post_json(server, "/api/user/register", data)
@@ -414,6 +415,106 @@ class TestRoutes(unittest.TestCase):
             assert rv4.status_code == 200
             assert js4["status"] == OrderStatus.OrderCancelled
 
+    def test_review(self):
+        with self.app.test_client() as server:
+            # first user
+            user1 = self.user_register(server, "reviewer1",
+                                       "reviewer1@reviewer1.com",
+                                       "review123", 77)
+            assert user1.status_code == 200
+            user1 = json.loads(user1.data)
+            rv = self.user_login(server, "reviewer1@reviewer1.com", "review123")
+            assert rv.status_code == 200
+
+            # add review
+            # first package
+            data1 = dict(
+                pkg_name="package1",
+                pkg_version="version1",
+                display_name="Fine Package1",
+                price=0.99,
+                summary="summary1",
+                description="description1",
+                pkg_dependencies="dep1, dep2>0.5"
+            )
+            rv1 = self.post_json(server, "/api/item/add", data1)
+            assert rv1.status_code == 200
+            json2 = json.loads(rv1.data)
+
+            # review 1
+            review1 = dict(iid=json2['iid'], content="review1", rating=10)
+            rv2 = self.post_json(server, "/api/review/add", review1)
+            assert rv2.status_code == 200
+            json2 = json.loads(rv2.data)
+            assert json2['uid'] == user1['uid']
+            assert json2['content'] == review1['content']
+            assert json2['rating'] == review1['rating']
+
+            # list review
+            rv2 = server.get("/api/review/list?uid=%d&iid=%d" %
+                             (user1['uid'], json2['iid']))
+            assert rv2.status_code == 200
+            json3 = json.loads(rv2.data)
+            assert json3[0]['uid'] == json2['uid']
+            assert json3[0]['iid'] == json2['iid']
+            assert json3[0]['content'] == json2['content']
+            assert json3[0]['rating'] == json2['rating']
+
+            # edit review
+            review2 = copy(json2)
+            review2['content'] = 'review2'
+            review2['rating'] = 0
+            rv3 = self.post_json(server, "/api/review/edit/%d" %
+                                 review2['rid'], review2)
+            assert rv3.status_code == 200
+
+            # delete
+            rv4 = server.get("/api/review/delete/%d" % json2['rid'])
+            assert rv4.status_code == 200
+
+    def test_wishlist(self):
+        with self.app.test_client() as server:
+            # first user
+            user1 = self.user_register(server, "reviewer1",
+                                       "reviewer1@reviewer1.com",
+                                       "review123", 77)
+            assert user1.status_code == 200
+            user1 = json.loads(user1.data)
+            rv = self.user_login(server, "reviewer1@reviewer1.com", "review123")
+            assert rv.status_code == 200
+
+            # add review
+            # first package
+            data1 = dict(
+                pkg_name="package1",
+                pkg_version="version1",
+                display_name="Fine Package1",
+                price=0.99,
+                summary="summary1",
+                description="description1",
+                pkg_dependencies="dep1, dep2>0.5"
+            )
+            rv1 = self.post_json(server, "/api/item/add", data1)
+            assert rv1.status_code == 200
+            json1 = json.loads(rv1.data)
+
+            # add to wishlist
+            data2 = dict(
+                iid=json1['iid']
+            )
+            rv2 = self.post_json(server, "/api/wishlist/add", data2)
+            assert rv2.status_code == 200
+
+            # list wishlist
+            rv3 = server.get("/api/wishlist")
+            assert rv3.status_code == 200
+            json2 = json.loads(rv3.data)
+            assert len(json2) == 1
+            assert json2[0]['iid'] == data2['iid']
+
+            # delete from wishlist
+            rv4 = server.get("/api/wishlist/delete/%d" % json2[0]['iid'])
+            assert rv4.status_code == 200
 
 if __name__ == "__main__":
     unittest.main()

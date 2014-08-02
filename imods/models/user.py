@@ -6,6 +6,7 @@ from imods.models.order import Order
 from imods.models.mixin import JSONSerialize
 from imods.models.constants import UserRole, AccountStatus
 from imods.models.wishlist import WishList
+from imods.models.review import Review
 
 
 class User(db.Model, JSONSerialize):
@@ -46,6 +47,8 @@ class User(db.Model, JSONSerialize):
                              cascade="all,delete-orphan")
 
     wishlist = db.relationship(Item, secondary=WishList)
+
+    reviews = db.relationship(Review, back_populates="user")
 
     def __repr__(self):
         return "<User %r(%r uid=%r)>" % (self.fullname, self.email, self.uid)
