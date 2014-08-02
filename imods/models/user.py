@@ -5,6 +5,11 @@ from imods.models.item import Item
 from imods.models.order import Order
 from imods.models.mixin import JSONSerialize
 from imods.models.constants import UserRole, AccountStatus
+<<<<<<< Updated upstream
+=======
+from imods.models.wishlist import WishList
+from imods.models.review import Review
+>>>>>>> Stashed changes
 
 
 class User(db.Model, JSONSerialize):
@@ -43,5 +48,12 @@ class User(db.Model, JSONSerialize):
                              backref="user",
                              cascade="all,delete-orphan")
 
+<<<<<<< Updated upstream
+=======
+    wishlist = db.relationship(Item, secondary=WishList)
+
+    reviews = db.relationship(Review, back_populates="user")
+
+>>>>>>> Stashed changes
     def __repr__(self):
         return "<User %r(%r uid=%r)>" % (self.fullname, self.email, self.uid)

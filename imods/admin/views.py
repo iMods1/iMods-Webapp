@@ -1,6 +1,6 @@
 from imods import db
 from imods.models import User, BillingInfo, Category, Device, Item, Order
-from imods.models import UserRole, BillingType, OrderStatus
+from imods.models import UserRole, BillingType, OrderStatus, Review
 from flask.ext.admin import Admin, expose, helpers, AdminIndexView
 from flask.ext.admin.contrib.sqla import ModelView
 from flask import session, redirect, url_for, request
@@ -112,6 +112,14 @@ class DeviceView(ModelView):
         super(DeviceView, self).__init__(Device, session, **kwargs)
 
 
+class ReviewView(ModelView):
+    def is_accessible(self):
+        return session.get('user') is not None
+
+    def __init__(self, session, **kwargs):
+        super(ReviewView, self).__init__(Review, session, **kwargs)
+
+
 class LoginForm(wtf.form.Form):
     email = wtf.fields.TextField(validators=[wtf.validators.required(),
                                              wtf.validators.Email()])
@@ -179,3 +187,4 @@ imods_admin.add_view(BillingView(db.session))
 imods_admin.add_view(CategoryView(db.session))
 imods_admin.add_view(ItemView(db.session))
 imods_admin.add_view(OrderView(db.session))
+imods_admin.add_view(ReviewView(db.session))

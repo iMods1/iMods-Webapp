@@ -1,6 +1,7 @@
 from imods import db
 from imods.models.mixin import JSONSerialize
 from datetime import datetime
+from imods.models.review import Review
 # Removing 'import category' will cause table not found error
 import category
 # Remove PEP8 'not used' error
@@ -40,6 +41,8 @@ class Item(db.Model, JSONSerialize):
     add_date = db.Column(db.Date(), default=datetime.utcnow, nullable=False)
     last_update_date = db.Column(db.Date(), default=datetime.utcnow,
                                  onupdate=datetime.utcnow, nullable=False)
+
+    reviews = db.relationship(Review, back_populates="item")
 
     def dependencies(self):
         return "<Dependencies: %r>" % (self.pkg_dependencies)
