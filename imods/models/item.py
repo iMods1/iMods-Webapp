@@ -14,7 +14,8 @@ class Item(db.Model, JSONSerialize):
                   "display_name", "pkg_version", "pkg_assets_path",
                   "pkg_dependencies", "price", "summary", "description",
                   "add_date", "last_update_date")
-    iid = db.Column(db.Integer, primary_key=True)
+    iid = db.Column(db.Integer, primary_key=True, nullable=False,
+                    autoincrement=True)
     # ON DELETE CASCADE prevents the category from being deleted if it has at
     # least one item associated with it.
     category_id = db.Column(db.Integer,
