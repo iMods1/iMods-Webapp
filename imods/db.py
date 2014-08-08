@@ -10,6 +10,7 @@ def add_admins_to_db(app, db):
         usr = User(fullname='admin',
                    email=adm['email'],
                    password=generate_password_hash(adm['password']),
+                   author_identifier=adm["author_id"],
                    private_key="asdasdad",
                    role=UserRole.SiteAdmin)
         db.session.add(usr)

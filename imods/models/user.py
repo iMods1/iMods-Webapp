@@ -11,7 +11,7 @@ from imods.models.review import Review
 
 class User(db.Model, JSONSerialize):
     __tablename__ = 'USER'
-    __public__ = ("uid", "email", "fullname", "age", "author_identifier")
+    __public__ = ("uid", "email", "fullname", "age", "role", "author_identifier")
 
     uid = db.Column(db.Integer, nullable=False,
                     primary_key=True, autoincrement=True)

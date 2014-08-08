@@ -8,7 +8,8 @@ DEBUG = True
 ADMINS = [
     {
         'email': 'test@test.com',
-        'password': 'test'
+        'password': 'test',
+        'author_id': 'imods.test'
     }
 ]
 SECRET_KEY = 'somescretkey'  # Replace this in production

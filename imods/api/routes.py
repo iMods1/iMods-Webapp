@@ -20,7 +20,8 @@ api_mod = Blueprint("api_mods", __name__, url_prefix="/api")
 setup_api_exceptions(api_mod)
 
 
-success_response = {'message': 'successful'}  #: A success_response
+success_response = {'status_code': 200, 'message': 'successful'}
+#: A success_response
 
 
 DEFAULT_LIMIT = 5
