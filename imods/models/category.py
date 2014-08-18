@@ -7,6 +7,8 @@ class Category(db.Model, JSONSerialize):
     __table_args = {"extend_existing": True}
     __public__ = ("cid", "parent_id", "name", "description")
 
+    reservedNames = ["featured"]
+
     cid = db.Column(db.Integer, primary_key=True, nullable=False)
     parent_id = db.Column(db.Integer, db.ForeignKey("CATEGORY.cid"))
     name = db.Column(db.String(100), nullable=False)
