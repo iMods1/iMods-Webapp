@@ -19,7 +19,7 @@ def add_admins_to_db(app, db):
 
 def add_default_categories(app, db):
     for cat in app.config['DEFAULT_CATEGORIES']:
-        if User.query.filter_by(name=cat['name']).first():
+        if Category.query.filter_by(name=cat['name']).first():
             continue
         category = Category(**cat)
         db.session.add(category)
