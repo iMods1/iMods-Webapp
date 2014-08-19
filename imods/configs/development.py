@@ -12,6 +12,14 @@ ADMINS = [
         'author_id': 'imods.test'
     }
 ]
+
+DEFAULT_CATEGORIES = [
+    {
+        'name': 'featured',
+        'description': 'featured apps',
+    },
+]
+
 SECRET_KEY = 'somescretkey'  # Replace this in production
 
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')

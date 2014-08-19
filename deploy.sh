@@ -83,7 +83,7 @@ main(){
             VENV_DIR=${VENV_DIR-venv}\
             IMODS_DB_DIR=${IMODS_DB_DIR-/var/db/imods.wunderkind.us}\
             IMODS_CONFIG=${IMODS_CONFIG-imods.configs.production}\
-            python -c 'from imods import app,db;from imods.db import add_admins_to_db; add_admins_to_db(app,db);print "ok"'
+            python -c 'from imods import app,db;from imods.db import add_defaults; add_defaults(app,db);print "ok"'
             ;;
         test)
             python -m unittest discover -v tests

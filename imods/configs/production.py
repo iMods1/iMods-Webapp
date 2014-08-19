@@ -11,6 +11,13 @@ ADMINS = [
         'password': 'iModsAdmin123'
     }
 ]
+
+DEFAULT_CATEGORIES = [
+    {
+        'name': 'featured',
+        'description': 'featured apps',
+    },
+]
 SECRET_KEY = 'h\xcf\x08MW\x8d"\xde\xe5\xc1V\'\xa8(\x96\x910v\x14\x12#\xa1\x91K'
 
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')

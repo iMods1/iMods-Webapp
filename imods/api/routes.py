@@ -10,6 +10,7 @@ from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
 from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
 from imods.api.exceptions import CategorySelfParent, BadJSONData
+from imods.api.exceptions import CategoryNameReserved, InternalException
 from datetime import datetime
 import os
 import operator
@@ -332,22 +333,27 @@ def device_list(device_id=None):
         return res
 
 
-@api_mod.route("/category/list", defaults={"cid": None})
-@api_mod.route("/category/<int:cid>")
+@api_mod.route("/category/list", defaults={"cid": None, "name": None})
+@api_mod.route("/category/id/<int:cid>", defaults={"name": None})
+@api_mod.route("/category/name/<name>", defaults={"cid": None})
 @require_json(request=False)
-def category_list(cid):
+def category_list(cid, name):
     """
     Get category information.
 
     *** Request ***
 
     :queryparam int cid: unique category ID number
+    :queryparam str name: category name
 
     *** Response ***
+
     :jsonparam int cid: category id
     :jsonparam int parent_id: parent category id
     :jsonparam string name: name of the category
     :jsonparam string description: description of the category
+
+    _NOTE: /category/name/<name> returns a list(array) of categories_
 
     :resheader Content-Type: application/js
     :status 200: no error :py:obj:`.success_response`
@@ -358,6 +364,11 @@ def category_list(cid):
         if not category:
             raise ResourceIDNotFound
         return category.get_public()
+    elif name is not None:
+        with db_scoped_session() as ses:
+            categories = ses.query(Category).filter_by(name=name).all()
+            get_public = operator.methodcaller('get_public')
+            return map(get_public, categories)
     else:
         # Return all categories
         limit = request.args.get('limit') or DEFAULT_LIMIT
@@ -372,6 +383,34 @@ def category_list(cid):
         for cat in categories:
             result[cat.cid] = cat
         return result
+
+
+@api_mod.route("/category/featured")
+@require_json(request=False)
+def category_featured():
+    """
+    Get featured apps info.
+
+    *** Request ***
+
+    *** Response ***
+    :jsonparam int cid: category id
+    :jsonparam int parent_id: parent category id
+    :jsonparam string name: name of the category
+    :jsonparam string description: description of the category
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+
+    _This method should always return 200._
+    """
+    with db_scoped_session() as ses:
+        # TODO: cache featured category id or object
+        featured = ses.query(Category).filter_by(name='featured').all()
+        if len(featured) != 1:
+            raise InternalException("Featured category is not found or multiple\
+ instances are found.")
+        return featured[0].get_public()
 
 
 @api_mod.route("/category/add", methods=["POST"])
@@ -393,11 +432,14 @@ def category_add():
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 409: :py:exc:`.CategoryNameReserved`
     """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
     cat_name = req['name']
+    if cat_name.strip().lower() in Category.reservedNames:
+        raise CategoryNameReserved
     cat_parent_id = req.get('parent_id')
     cat_description = req.get('description', '')
     with db_scoped_session() as se:
@@ -700,6 +742,7 @@ def item_list(iid):
 
 @api_mod.route("/item/add", methods=["POST"])
 @require_login
+@require_privileges([UserRole.AppDev])
 @require_json()
 def item_add():
     """
@@ -722,12 +765,14 @@ def item_add():
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
     """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
     author_id = req.get("author_id") or session['user']['author_identifier']
-    item = Item(pkg_name=req['pkg_name'],
+    item = Item(category_id=req.get('category_id'),
+                pkg_name=req['pkg_name'],
                 pkg_version=req['pkg_version'],
                 display_name=req['display_name'],
                 author_id=author_id,
@@ -743,6 +788,7 @@ def item_add():
 
 @api_mod.route("/item/<int:iid>/update", methods=["POST"])
 @require_login
+@require_privileges([UserRole.AppDev])
 @require_json()
 def item_update(iid):
     """
@@ -767,6 +813,7 @@ def item_update(iid):
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.InsufficientPrivileges`
     """
     req = request.get_json()
     if type(req) is not dict:
@@ -782,6 +829,7 @@ def item_update(iid):
 
 @api_mod.route("/item/<int:iid>/delete")
 @require_login
+@require_privileges([UserRole.AppDev])
 @require_json(request=False)
 def item_delete(iid):
     """
@@ -797,6 +845,7 @@ def item_delete(iid):
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.InsufficientPrivileges`
     """
     author_id = session['user']['author_identifier']
     role = session['user']['role']
@@ -811,6 +860,21 @@ def item_delete(iid):
         else:
             raise InsufficientPrivileges()
     return success_response
+
+
+@api_mod.route("/item/featured")
+@require_json(request=False)
+def items_featured():
+    with db_scoped_session() as ses:
+        # TODO: cache featured category id or object
+        featured = ses.query(Category).filter_by(name='featured').all()
+        if len(featured) != 1:
+            raise InternalException("Featured category is not found or multiple\
+ instances are found.")
+        get_public = operator.methodcaller('get_public')
+        # TODO: cache featured items
+        items = featured[0].items.all()
+        return map(get_public, items)
 
 
 @api_mod.route("/order/add", methods=["POST"])

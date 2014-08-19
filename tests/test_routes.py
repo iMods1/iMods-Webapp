@@ -7,7 +7,7 @@ from tempfile import mkstemp
 import sys
 sys.path.append('')
 import imods
-from imods.models import UserRole, OrderStatus
+from imods.models import UserRole, OrderStatus, Category
 from imods.api.exceptions import *
 
 
@@ -20,6 +20,9 @@ class TestRoutes(unittest.TestCase):
         self.app = imods.app
         imods.init_db()
         self.db = imods.db
+        self.db.session.add(Category(name='featured',
+                                     description='Featured apps'))
+        self.db.session.commit()
 
     def tearDown(self):
         os.close(self.db_fd)
@@ -188,6 +191,11 @@ class TestRoutes(unittest.TestCase):
             assert js2["name"] == data2["name"]
             assert js2["description"] == data2["description"]
 
+            with server.get("/api/category/name/%s" % data1['name']) as rv:
+                assert rv.status_code == 200
+                js = json.loads(rv.data)
+                assert js[0]['name'] == data1['name']
+
             data3 = copy(data1)
             data3["name"] = "category updated"
             data3["description"] = "description updated"
@@ -196,7 +204,7 @@ class TestRoutes(unittest.TestCase):
             assert rv3.status_code == 200
             assert 'successful' in rv3.data
 
-            rv3 = server.get("/api/category/%d" % js2["cid"])
+            rv3 = server.get("/api/category/id/%d" % js2["cid"])
             assert rv3.status_code == 200
             js3 = json.loads(rv3.data)
             assert js3['parent_id'] == js1["cid"]
@@ -209,9 +217,58 @@ class TestRoutes(unittest.TestCase):
             assert rv4.status_code == 200
             assert 'successful' in rv4.data
 
-            rv5 = server.get("/api/category/%d" % js2["cid"])
+            rv5 = server.get("/api/category/id/%d" % js2["cid"])
             assert rv5.status_code == ResourceIDNotFound.status_code
             assert "not found" in rv5.data
+
+    def test_featured(self):
+        with self.app.test_client() as server:
+            self.user_register(server, "category_admin",
+                               "category@category.com", "category123", 99)
+            self.user_login(server, "category@category.com", "category123")
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.SiteAdmin
+
+            data1 = dict(
+                name="Featured",
+                description="description1"
+            )
+            with self.post_json(server, "/api/category/add", data1) as rv:
+                assert rv.status_code == 409
+                js = json.loads(rv.data)
+
+            cat_featured_id = None
+            with server.get("/api/category/featured") as rv:
+                assert rv.status_code == 200
+                js = json.loads(rv.data)
+                cat_featured_id = js['cid']
+
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
+
+            data_item = dict(
+                category_id=cat_featured_id,
+                pkg_name="package1",
+                pkg_version="version1",
+                display_name="Fine Package1",
+                price=0.99,
+                summary="summary1",
+                description="description1",
+                pkg_dependencies="dep1, dep2>0.5"
+            )
+            with self.post_json(server, "/api/item/add", data_item) as rv:
+                assert rv.status_code == 200
+
+            with server.get("/api/item/featured") as rv:
+                assert rv.status_code == 200
+                js = json.loads(rv.data)
+                print js
+                assert len(js) == 1
+                item = js[0]
+                assert item['pkg_name'] == data_item['pkg_name']
+                assert item['pkg_version'] == data_item['pkg_version']
+                assert item['display_name'] == data_item['display_name']
 
     def test_billing(self):
         with self.app.test_client() as server:
@@ -290,6 +347,9 @@ class TestRoutes(unittest.TestCase):
                                       "item123", 33)
             user = json.loads(user.data)
             self.user_login(server, "item1@item.com", "item123")
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
 
             data1 = dict(
                 pkg_name="package1",
@@ -352,6 +412,9 @@ class TestRoutes(unittest.TestCase):
             user = json.loads(user.data)
             rv = self.user_login(server, "order1@order.com", "order123")
             assert rv.status_code == 200
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
 
             data1 = dict(
                 pkg_name="package_item1",
@@ -425,6 +488,9 @@ class TestRoutes(unittest.TestCase):
             user1 = json.loads(user1.data)
             rv = self.user_login(server, "reviewer1@reviewer1.com", "review123")
             assert rv.status_code == 200
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
 
             # add review
             # first package
@@ -482,6 +548,9 @@ class TestRoutes(unittest.TestCase):
             user1 = json.loads(user1.data)
             rv = self.user_login(server, "reviewer1@reviewer1.com", "review123")
             assert rv.status_code == 200
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
 
             # add review
             # first package
