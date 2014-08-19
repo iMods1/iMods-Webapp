@@ -347,10 +347,13 @@ def category_list(cid, name):
     :queryparam str name: category name
 
     *** Response ***
+
     :jsonparam int cid: category id
     :jsonparam int parent_id: parent category id
     :jsonparam string name: name of the category
     :jsonparam string description: description of the category
+
+    _NOTE: /category/name/<name> returns a list(array) of categories_
 
     :resheader Content-Type: application/js
     :status 200: no error :py:obj:`.success_response`
