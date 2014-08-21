@@ -706,15 +706,17 @@ def billing_delete(bid):
 
 
 @api_mod.route("/item/list", defaults={"iid": None})
-@api_mod.route("/item/<int:iid>")
+@api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None})
+@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None})
 @require_json(request=False)
-def item_list(iid):
+def item_list(iid, pkg_name):
     """
     Get information of an item.
 
     *** Request ***
 
     :query int iid: item id
+    :query str pkg_name: unique package name
 
     *** Response ***
 
@@ -738,6 +740,11 @@ def item_list(iid):
     """
     if iid is not None:
         item = Item.query.get(iid)
+        if not item:
+            raise ResourceIDNotFound
+        return item.get_public()
+    elif pkg_name is not None:
+        item = Item.query.filter_by(pkg_name=pkg_name).first()
         if not item:
             raise ResourceIDNotFound
         return item.get_public()
@@ -919,6 +926,8 @@ def order_add():
     :jsonparam float total_price: total price
     :jsonparam float total_charged: total charged
     :jsonparam string order_date: the date of order placed
+    :jsonparam dict billing: billing info
+    :jsonparam dict item: item info
 
     :reqheader Content-Type: application/json
     :resheader Content-Type: application/json
@@ -981,6 +990,8 @@ def order_list(oid):
     :jsonparam float total_price: total price
     :jsonparam float total_charged: total charged
     :jsonparam string order_date: the date of order placed
+    :jsonparam dict billing: billing info
+    :jsonparam dict item: item info
 
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
@@ -1015,7 +1026,7 @@ def order_list(oid):
 @require_json()
 def order_udpate(oid):
     """
-    Update an uncomplete order. Notice: an complete order cannot be changed.
+    Update an uncomplete order. Notice: a complete order cannot be changed.
 
     *** Request ***
 
@@ -1071,6 +1082,8 @@ def order_cancel(oid):
     :status 401: :py:exc:`.OrderNotChangable`
     """
     order = Order.query.get(oid)
+    if not order:
+        raise ResourceIDNotFound
     if order.status == OrderStatus.OrderCompleted:
         raise OrderNotChangable
     if not order:

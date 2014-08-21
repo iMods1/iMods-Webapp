@@ -387,7 +387,7 @@ class TestRoutes(unittest.TestCase):
             assert rv2.status_code == 200
             assert 'successful' in rv2.data
 
-            rv2 = server.get("/api/item/%d" % js1["iid"])
+            rv2 = server.get("/api/item/id/%d" % js1["iid"])
             assert rv2.status_code == 200
             js2 = json.loads(rv2.data)
             assert js2["pkg_name"] == data2["pkg_name"]
@@ -402,7 +402,7 @@ class TestRoutes(unittest.TestCase):
             assert rv3.status_code == 200
             assert 'successful' in rv3.data
 
-            rv4 = server.get("/api/item/%d" % js1["iid"])
+            rv4 = server.get("/api/item/id/%d" % js1["iid"])
             assert rv4.status_code == ResourceIDNotFound.status_code
             assert 'not found' in rv4.data
 
@@ -461,6 +461,8 @@ class TestRoutes(unittest.TestCase):
             assert js1["total_charged"] == data3["total_charged"]
             assert js1["quantity"] == 1
             assert js1["currency"] == "USD"
+            assert js1["item"]["pkg_name"] == data1["pkg_name"]
+            assert js1["billing"]["address"] == data2["address"]
 
             rv2 = server.get("/api/order/%d" % js1["oid"])
             assert rv2.status_code == 200

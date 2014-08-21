@@ -9,7 +9,8 @@ from imods.models.item import Item
 class Order(db.Model, JSONSerialize):
     __tablename__ = "ORDER"
     __public__ = ("oid", "uid", "pkg_name", "quantity", "currency", "status",
-                  "billing_id", "total_price", "total_charged", "order_date")
+                  "billing_id", "total_price", "total_charged", "order_date",
+                  "item", "billing")
 
     oid = db.Column(db.Integer, primary_key=True)
     uid = db.Column(db.Integer, db.ForeignKey("USER.uid", ondelete="CASCADE"))
