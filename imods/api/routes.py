@@ -151,7 +151,7 @@ def user_logout():
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     """
-    if session['user'] is not None:
+    if session.get('user') is not None:
         del session['user']
     return success_response
 
@@ -451,7 +451,7 @@ def category_add():
         return category.get_public()
 
 
-@api_mod.route("/category/<int:cid>/update", methods=["POST"])
+@api_mod.route("/category/update/<int:cid>", methods=["POST"])
 @require_login
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json()
@@ -488,7 +488,7 @@ def category_update(cid):
     return success_response
 
 
-@api_mod.route("/category/<int:cid>/delete")
+@api_mod.route("/category/delete/<int:cid>")
 @require_login
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json(request=False)
@@ -578,6 +578,7 @@ def billing_add():
     :jsonparam string address: billing address
     :jsonparam int zipcode: zipcode
     :jsonparam string state: state
+    :jsonparam string city: city
     :jsonparam string country: country
     :jsonparam string type_: payment method type, see :py:class:`.BillingType`
     :jsonparam string cc_no: credit card number, `optional`
@@ -598,13 +599,18 @@ def billing_add():
         req = dict(json.loads(req))
     uid = session['user']['uid']
     if req.get('cc_expr'):
-        cc_expr = datetime.strptime(req['cc_expr'], '%d/%y')
+        cc_expr = datetime.strptime(req['cc_expr'], '%m/%y')
     else:
         cc_expr = None
+    # TODO: Verify creditcard info before add it to database
+    cc_cvv = req.get('cc_cvv')
+    if cc_cvv:
+        del req['cc_cvv']
     billing = BillingInfo(uid=uid,
                           address=req['address'],
                           zipcode=req['zipcode'],
                           state=req['state'],
+                          city=req['city'],
                           country=req['country'],
                           type_=req['type_'],
                           cc_no=req.get('cc_no'),
@@ -616,7 +622,7 @@ def billing_add():
         return billing.get_public()
 
 
-@api_mod.route("/billing/<int:bid>/update", methods=["POST"])
+@api_mod.route("/billing/update/<int:bid>", methods=["POST"])
 @require_login
 @require_json()
 def billing_update(bid):
@@ -628,6 +634,7 @@ def billing_update(bid):
     :jsonparam string address: billing address
     :jsonparam int zipcode: zipcode
     :jsonparam string state: state
+    :jsonparam string city: city
     :jsonparam string country: country
     :jsonparam string type_: payment method type
     :jsonparam string cc_no: credit card number, `optional`
@@ -650,8 +657,15 @@ def billing_update(bid):
     if req.get('bid'):
         # Ignore bid in json data
         del req['bid']
+    if req.get('uid'):
+        # Ignore uid in json data
+        del req['uid']
     if req.get('cc_expr'):
         req['cc_expr'] = datetime.strptime(req['cc_expr'], '%d/%y')
+    # TODO: Verify creditcard info before add it to database
+    cc_cvv = req.get('cc_cvv')
+    if cc_cvv:
+        del req['cc_cvv']
     uid = session['user']['uid']
     billing = BillingInfo.query.filter_by(bid=bid, uid=uid).first()
     if not billing:
@@ -663,7 +677,7 @@ def billing_update(bid):
     return success_response
 
 
-@api_mod.route("/billing/<int:bid>/delete")
+@api_mod.route("/billing/delete/<int:bid>")
 @require_login
 @require_json(request=False)
 def billing_delete(bid):
@@ -786,7 +800,7 @@ def item_add():
         return item.get_public()
 
 
-@api_mod.route("/item/<int:iid>/update", methods=["POST"])
+@api_mod.route("/item/update/<int:iid>", methods=["POST"])
 @require_login
 @require_privileges([UserRole.AppDev])
 @require_json()
@@ -827,7 +841,7 @@ def item_update(iid):
     return success_response
 
 
-@api_mod.route("/item/<int:iid>/delete")
+@api_mod.route("/item/delete/<int:iid>")
 @require_login
 @require_privileges([UserRole.AppDev])
 @require_json(request=False)
@@ -933,6 +947,7 @@ def order_add():
                       quantity=quantity, currency=currency,
                       total_price=req['total_price'],
                       total_charged=req['total_charged'])
+        # TODO: Calculate total and return back to client.
     except:
         raise
     with db_scoped_session() as se:
@@ -995,7 +1010,7 @@ def order_list(oid):
         return map(get_public, orders)
 
 
-@api_mod.route("/order/<int:oid>/update", methods=["POST"])
+@api_mod.route("/order/update/<int:oid>", methods=["POST"])
 @require_login
 @require_json()
 def order_udpate(oid):
@@ -1035,7 +1050,7 @@ def order_udpate(oid):
     return success_response
 
 
-@api_mod.route("/order/<int:oid>/cancel")
+@api_mod.route("/order/cancel/<int:oid>")
 @require_login
 @require_json(request=False)
 def order_cancel(oid):
