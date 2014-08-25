@@ -43,7 +43,8 @@ class Item(db.Model, JSONSerialize):
     last_update_date = db.Column(db.Date(), default=datetime.utcnow,
                                  onupdate=datetime.utcnow, nullable=False)
 
-    reviews = db.relationship(Review, back_populates="item")
+    reviews = db.relationship(Review, back_populates="item",
+                              cascade="all, delete-orphan")
 
     def dependencies(self):
         return "<Dependencies: %r>" % (self.pkg_dependencies)

@@ -11,7 +11,8 @@ from imods.models.review import Review
 
 class User(db.Model, JSONSerialize):
     __tablename__ = 'USER'
-    __public__ = ("uid", "email", "fullname", "age", "role", "author_identifier")
+    __public__ = ("uid", "email", "fullname", "age", "role",
+                  "author_identifier")
 
     uid = db.Column(db.Integer, nullable=False,
                     primary_key=True, autoincrement=True)
@@ -46,7 +47,7 @@ class User(db.Model, JSONSerialize):
                              backref="user",
                              cascade="all,delete-orphan")
 
-    wishlist = db.relationship(Item, secondary=WishList)
+    wishlist = db.relationship(Item, secondary=WishList, lazy='dynamic')
 
     reviews = db.relationship(Review, back_populates="user")
 

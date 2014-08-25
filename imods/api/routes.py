@@ -1,7 +1,7 @@
 from flask import request, session, Blueprint, json
 from werkzeug import check_password_hash, generate_password_hash
 from imods.models import User, Order, Item, Device, Category, BillingInfo
-from imods.models import UserRole, OrderStatus, Review, WishList
+from imods.models import UserRole, OrderStatus, Review
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session
@@ -27,7 +27,8 @@ success_response = {'status_code': 200, 'message': 'successful'}
 
 DEFAULT_LIMIT = 5
 MAX_LIMIT = 100
-MIN_REVIEW_LEN = 4
+MIN_REVIEW_CONTENT_LEN = 10
+MIN_REVIEW_TITLE_LEN = 4
 
 
 @api_mod.route("/user/profile")
@@ -151,7 +152,7 @@ def user_logout():
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     """
-    if session['user'] is not None:
+    if session.get('user') is not None:
         del session['user']
     return success_response
 
@@ -451,7 +452,7 @@ def category_add():
         return category.get_public()
 
 
-@api_mod.route("/category/<int:cid>/update", methods=["POST"])
+@api_mod.route("/category/update/<int:cid>", methods=["POST"])
 @require_login
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json()
@@ -488,7 +489,7 @@ def category_update(cid):
     return success_response
 
 
-@api_mod.route("/category/<int:cid>/delete")
+@api_mod.route("/category/delete/<int:cid>")
 @require_login
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json(request=False)
@@ -578,6 +579,7 @@ def billing_add():
     :jsonparam string address: billing address
     :jsonparam int zipcode: zipcode
     :jsonparam string state: state
+    :jsonparam string city: city
     :jsonparam string country: country
     :jsonparam string type_: payment method type, see :py:class:`.BillingType`
     :jsonparam string cc_no: credit card number, `optional`
@@ -598,13 +600,18 @@ def billing_add():
         req = dict(json.loads(req))
     uid = session['user']['uid']
     if req.get('cc_expr'):
-        cc_expr = datetime.strptime(req['cc_expr'], '%d/%y')
+        cc_expr = datetime.strptime(req['cc_expr'], '%m/%y')
     else:
         cc_expr = None
+    # TODO: Verify creditcard info before add it to database
+    cc_cvv = req.get('cc_cvv')
+    if cc_cvv:
+        del req['cc_cvv']
     billing = BillingInfo(uid=uid,
                           address=req['address'],
                           zipcode=req['zipcode'],
                           state=req['state'],
+                          city=req['city'],
                           country=req['country'],
                           type_=req['type_'],
                           cc_no=req.get('cc_no'),
@@ -616,7 +623,7 @@ def billing_add():
         return billing.get_public()
 
 
-@api_mod.route("/billing/<int:bid>/update", methods=["POST"])
+@api_mod.route("/billing/update/<int:bid>", methods=["POST"])
 @require_login
 @require_json()
 def billing_update(bid):
@@ -628,6 +635,7 @@ def billing_update(bid):
     :jsonparam string address: billing address
     :jsonparam int zipcode: zipcode
     :jsonparam string state: state
+    :jsonparam string city: city
     :jsonparam string country: country
     :jsonparam string type_: payment method type
     :jsonparam string cc_no: credit card number, `optional`
@@ -650,8 +658,15 @@ def billing_update(bid):
     if req.get('bid'):
         # Ignore bid in json data
         del req['bid']
+    if req.get('uid'):
+        # Ignore uid in json data
+        del req['uid']
     if req.get('cc_expr'):
         req['cc_expr'] = datetime.strptime(req['cc_expr'], '%d/%y')
+    # TODO: Verify creditcard info before add it to database
+    cc_cvv = req.get('cc_cvv')
+    if cc_cvv:
+        del req['cc_cvv']
     uid = session['user']['uid']
     billing = BillingInfo.query.filter_by(bid=bid, uid=uid).first()
     if not billing:
@@ -663,7 +678,7 @@ def billing_update(bid):
     return success_response
 
 
-@api_mod.route("/billing/<int:bid>/delete")
+@api_mod.route("/billing/delete/<int:bid>")
 @require_login
 @require_json(request=False)
 def billing_delete(bid):
@@ -692,15 +707,17 @@ def billing_delete(bid):
 
 
 @api_mod.route("/item/list", defaults={"iid": None})
-@api_mod.route("/item/<int:iid>")
+@api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None})
+@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None})
 @require_json(request=False)
-def item_list(iid):
+def item_list(iid, pkg_name):
     """
     Get information of an item.
 
     *** Request ***
 
     :query int iid: item id
+    :query str pkg_name: unique package name
 
     *** Response ***
 
@@ -724,6 +741,11 @@ def item_list(iid):
     """
     if iid is not None:
         item = Item.query.get(iid)
+        if not item:
+            raise ResourceIDNotFound
+        return item.get_public()
+    elif pkg_name is not None:
+        item = Item.query.filter_by(pkg_name=pkg_name).first()
         if not item:
             raise ResourceIDNotFound
         return item.get_public()
@@ -786,7 +808,7 @@ def item_add():
         return item.get_public()
 
 
-@api_mod.route("/item/<int:iid>/update", methods=["POST"])
+@api_mod.route("/item/update/<int:iid>", methods=["POST"])
 @require_login
 @require_privileges([UserRole.AppDev])
 @require_json()
@@ -827,7 +849,7 @@ def item_update(iid):
     return success_response
 
 
-@api_mod.route("/item/<int:iid>/delete")
+@api_mod.route("/item/delete/<int:iid>")
 @require_login
 @require_privileges([UserRole.AppDev])
 @require_json(request=False)
@@ -905,6 +927,8 @@ def order_add():
     :jsonparam float total_price: total price
     :jsonparam float total_charged: total charged
     :jsonparam string order_date: the date of order placed
+    :jsonparam dict billing: billing info
+    :jsonparam dict item: item info
 
     :reqheader Content-Type: application/json
     :resheader Content-Type: application/json
@@ -933,6 +957,7 @@ def order_add():
                       quantity=quantity, currency=currency,
                       total_price=req['total_price'],
                       total_charged=req['total_charged'])
+        # TODO: Calculate total and return back to client.
     except:
         raise
     with db_scoped_session() as se:
@@ -966,6 +991,8 @@ def order_list(oid):
     :jsonparam float total_price: total price
     :jsonparam float total_charged: total charged
     :jsonparam string order_date: the date of order placed
+    :jsonparam dict billing: billing info
+    :jsonparam dict item: item info
 
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
@@ -995,12 +1022,12 @@ def order_list(oid):
         return map(get_public, orders)
 
 
-@api_mod.route("/order/<int:oid>/update", methods=["POST"])
+@api_mod.route("/order/update/<int:oid>", methods=["POST"])
 @require_login
 @require_json()
 def order_udpate(oid):
     """
-    Update an uncomplete order. Notice: an complete order cannot be changed.
+    Update an uncomplete order. Notice: a complete order cannot be changed.
 
     *** Request ***
 
@@ -1035,7 +1062,7 @@ def order_udpate(oid):
     return success_response
 
 
-@api_mod.route("/order/<int:oid>/cancel")
+@api_mod.route("/order/cancel/<int:oid>")
 @require_login
 @require_json(request=False)
 def order_cancel(oid):
@@ -1056,6 +1083,8 @@ def order_cancel(oid):
     :status 401: :py:exc:`.OrderNotChangable`
     """
     order = Order.query.get(oid)
+    if not order:
+        raise ResourceIDNotFound
     if order.status == OrderStatus.OrderCompleted:
         raise OrderNotChangable
     if not order:
@@ -1133,8 +1162,10 @@ def review_add():
     :reqheader Content-Type: application/json
     :jsonparam int uid: User ID
     :jsonparam int iid: Item ID
+    :jsonparam string title: Title of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_TITLE_LEN` characters.
     :jsonparam string content: Content of the review,\
-    must be at least :py:obj:`.MIN_REVIEW_LEN` characters.
+    must be at least :py:obj:`.MIN_REVIEW_CONTENT_LEN` characters.
     :jsonparam int rating: Rating of the item
 
     *** Response ***
@@ -1145,6 +1176,7 @@ def review_add():
     :jsonparam int iid: Item ID
     :jsonparam string content: Content of the review.
     :jsonparam int rating: Rating of the item.
+    :jsonparam string add_date: date and time of the review was created
 
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
@@ -1154,6 +1186,7 @@ def review_add():
     req = request.get_json()
     uid = session['user']['uid']
     iid = req.get('iid')
+    title = req.get('title')
     content = req.get('content')
     rating = req.get('rating')
     if iid is None or content is None or rating is None:
@@ -1166,19 +1199,23 @@ def review_add():
     if int(rating) < 0:
         raise BadJSONData("Rating must be a positive integer.")
 
-    if len(content) < MIN_REVIEW_LEN:
+    if len(content) < MIN_REVIEW_CONTENT_LEN:
         raise BadJSONData("Content must be at least %d characters"
-                          % MIN_REVIEW_LEN)
+                          % MIN_REVIEW_CONTENT_LEN)
+
+    if len(title) < MIN_REVIEW_TITLE_LEN:
+        raise BadJSONData("Title must be at least %d characters"
+                          % MIN_REVIEW_TITLE_LEN)
 
     with db_scoped_session() as ses:
-        review = Review(uid=uid, iid=iid,
+        review = Review(uid=uid, iid=iid, title=title,
                         content=content, rating=rating)
         ses.add(review)
         ses.commit()
         return review.get_public()
 
 
-@api_mod.route("/review/edit/<int:rid>", methods=["POST"])
+@api_mod.route("/review/update/<int:rid>", methods=["POST"])
 @require_login
 @require_json()
 def review_edit(rid):
@@ -1189,8 +1226,10 @@ def review_edit(rid):
 
     :reqheader Content-Type: application/json
     :param int rid: Review ID.
-    :jsonparam string content: Content of the review.\
-        Must be at least :py:obj:`.MIN_REVIEW_LEN` characters
+    :jsonparam string title: New title of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_TITLE_LEN` characters.
+    :jsonparam string content: New content of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_CONTENT_LEN` characters.
     :jsonparam int rating: Rating of the item. Must be a positive integer.
 
     *** Response ***
@@ -1211,14 +1250,23 @@ def review_edit(rid):
         if review.uid != session['user']['uid']:
             raise InsufficientPrivileges
 
+        title = req.get('title')
         content = req.get('content')
         rating = int(req.get('rating'))
-        if content and len(content) < MIN_REVIEW_LEN:
+
+        if title and len(title) < MIN_REVIEW_TITLE_LEN:
+            raise BadJSONData("Title must be at least %d characters" %
+                              MIN_REVIEW_TITLE_LEN)
+
+        if content and len(content) < MIN_REVIEW_CONTENT_LEN:
             raise BadJSONData("Content must be at least %d characters" %
-                              MIN_REVIEW_LEN)
+                              MIN_REVIEW_CONTENT_LEN)
 
         if rating is not None and rating < 0:
             raise BadJSONData("Rating must be a positive integer.")
+
+        if title is not None:
+            review.title = title
 
         if content is not None:
             review.content = content
@@ -1269,7 +1317,6 @@ def wishtlist_list():
     Get the wishlist of a user.
 
     *** Request ***
-    :param int uid: User ID.
 
     *** Response ***
 
@@ -1281,10 +1328,9 @@ def wishtlist_list():
     """
     with db_scoped_session() as ses:
         user = ses.query(User).get(session['user']['uid'])
-
-        items = ses.query(WishList).filter_by(uid=user.uid).all()
-        res = [{'iid': iid} for _, iid in items]
-        return res
+        items = user.wishlist.all()
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, items)
 
 
 @api_mod.route("/wishlist/add", methods=["POST"])
@@ -1352,3 +1398,31 @@ def wishlist_delete(iid):
         user.wishlist.remove(wishlist_item)
         ses.commit()
     return success_response
+
+
+@api_mod.route("/wishlist/clear")
+@require_login
+@require_json(request=False)
+def wishlist_clear():
+    """
+    Delete all entries in wishlists.
+
+    *** Request ***
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
+    with db_scoped_session() as ses:
+        user = ses.query(User).get(session['user']['uid'])
+        try:
+            for item in user.wishlist:
+                ses.delete(item)
+            ses.commit()
+        except Exception as e:
+            ses.rollback()
+            raise e
+        # TODO: Add databse exception
+        return success_response
