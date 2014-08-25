@@ -1190,7 +1190,7 @@ def review_add():
     title = req.get('title')
     content = req.get('content')
     rating = req.get('rating')
-    if iid is None or content is None or rating is None or title:
+    if iid is None or content is None or rating is None or title is None:
         raise BadJSONData
 
     if User.query.get(uid) is None\
