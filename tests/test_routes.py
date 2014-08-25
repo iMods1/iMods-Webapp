@@ -301,7 +301,7 @@ class TestRoutes(unittest.TestCase):
             assert js1["country"] == data1["country"]
             assert js1["type_"] == data1["type_"]
 
-            rv2 = server.get("/api/billing/%d" % js1["bid"])
+            rv2 = server.get("/api/billing/id/%d" % js1["bid"])
             assert rv2.status_code == 200
             js2 = json.loads(rv2.data)
             assert js2["uid"] == user["uid"]
@@ -324,7 +324,7 @@ class TestRoutes(unittest.TestCase):
             assert rv3.status_code == 200
             assert "successful" in rv3.data
 
-            rv4 = server.get("/api/billing/%d" % js2["bid"])
+            rv4 = server.get("/api/billing/id/%d" % js2["bid"])
             assert rv4.status_code == 200
             js4 = json.loads(rv4.data)
             assert js4["uid"] == js2["uid"]
@@ -464,7 +464,7 @@ class TestRoutes(unittest.TestCase):
             assert js1["item"]["pkg_name"] == data1["pkg_name"]
             assert js1["billing"]["address"] == data2["address"]
 
-            rv2 = server.get("/api/order/%d" % js1["oid"])
+            rv2 = server.get("/api/order/id/%d" % js1["oid"])
             assert rv2.status_code == 200
             js2 = json.loads(rv2.data)
             assert js2["billing_id"] == data3["billing_id"]
@@ -478,7 +478,7 @@ class TestRoutes(unittest.TestCase):
             assert rv3.status_code == 200
             assert 'successful' in rv3.data
 
-            rv4 = server.get("/api/order/%d" % js1["oid"])
+            rv4 = server.get("/api/order/id/%d" % js1["oid"])
             js4 = json.loads(rv4.data)
             assert rv4.status_code == 200
             assert js4["status"] == OrderStatus.OrderCancelled
@@ -602,9 +602,6 @@ class TestRoutes(unittest.TestCase):
             rv2 = self.post_json(server, "/api/wishlist/add", data2)
             assert rv2.status_code == 200
 
-            rv2 = self.post_json(server, "/api/wishlist/add", data2)
-            assert rv2.status_code == 200
-
             rv4 = server.get("/api/wishlist/clear")
             assert rv4.status_code == 200
 
@@ -612,6 +609,9 @@ class TestRoutes(unittest.TestCase):
             assert rv4.status_code == 200
             json4 = json.loads(rv4.data)
             assert len(json4) == 0
+
+            rv2 = server.get("/api/item/id/%d" % json1["iid"])
+            assert rv2.status_code == 200
 
 if __name__ == "__main__":
     unittest.main()

@@ -47,7 +47,7 @@ class User(db.Model, JSONSerialize):
                              backref="user",
                              cascade="all,delete-orphan")
 
-    wishlist = db.relationship(Item, secondary=WishList, lazy='dynamic')
+    wishlist = db.relationship("WishList", lazy='dynamic')
 
     reviews = db.relationship(Review, back_populates="user")
 

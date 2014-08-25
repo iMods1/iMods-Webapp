@@ -53,6 +53,11 @@ class UserAlreadRegistered(APIException):
     message = 'User already registered'
 
 
+class ResourceUniqueError(APIException):
+    status_code = 409
+    message = 'Unique resource is already inserted'
+
+
 class CategoryNameReserved(APIException):
     status_code = 409
     message = 'Category name is reserved'
