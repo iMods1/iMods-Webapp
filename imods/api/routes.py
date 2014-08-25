@@ -1,7 +1,7 @@
 from flask import request, session, Blueprint, json
 from werkzeug import check_password_hash, generate_password_hash
 from imods.models import User, Order, Item, Device, Category, BillingInfo
-from imods.models import UserRole, OrderStatus, Review, WishList
+from imods.models import UserRole, OrderStatus, Review
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session
@@ -27,7 +27,8 @@ success_response = {'status_code': 200, 'message': 'successful'}
 
 DEFAULT_LIMIT = 5
 MAX_LIMIT = 100
-MIN_REVIEW_LEN = 4
+MIN_REVIEW_CONTENT_LEN = 10
+MIN_REVIEW_TITLE_LEN = 4
 
 
 @api_mod.route("/user/profile")
@@ -1161,8 +1162,10 @@ def review_add():
     :reqheader Content-Type: application/json
     :jsonparam int uid: User ID
     :jsonparam int iid: Item ID
+    :jsonparam string title: Title of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_TITLE_LEN` characters.
     :jsonparam string content: Content of the review,\
-    must be at least :py:obj:`.MIN_REVIEW_LEN` characters.
+    must be at least :py:obj:`.MIN_REVIEW_CONTENT_LEN` characters.
     :jsonparam int rating: Rating of the item
 
     *** Response ***
@@ -1173,6 +1176,7 @@ def review_add():
     :jsonparam int iid: Item ID
     :jsonparam string content: Content of the review.
     :jsonparam int rating: Rating of the item.
+    :jsonparam string add_date: date and time of the review was created
 
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
@@ -1182,6 +1186,7 @@ def review_add():
     req = request.get_json()
     uid = session['user']['uid']
     iid = req.get('iid')
+    title = req.get('title')
     content = req.get('content')
     rating = req.get('rating')
     if iid is None or content is None or rating is None:
@@ -1194,19 +1199,23 @@ def review_add():
     if int(rating) < 0:
         raise BadJSONData("Rating must be a positive integer.")
 
-    if len(content) < MIN_REVIEW_LEN:
+    if len(content) < MIN_REVIEW_CONTENT_LEN:
         raise BadJSONData("Content must be at least %d characters"
-                          % MIN_REVIEW_LEN)
+                          % MIN_REVIEW_CONTENT_LEN)
+
+    if len(title) < MIN_REVIEW_TITLE_LEN:
+        raise BadJSONData("Title must be at least %d characters"
+                          % MIN_REVIEW_TITLE_LEN)
 
     with db_scoped_session() as ses:
-        review = Review(uid=uid, iid=iid,
+        review = Review(uid=uid, iid=iid, title=title,
                         content=content, rating=rating)
         ses.add(review)
         ses.commit()
         return review.get_public()
 
 
-@api_mod.route("/review/edit/<int:rid>", methods=["POST"])
+@api_mod.route("/review/update/<int:rid>", methods=["POST"])
 @require_login
 @require_json()
 def review_edit(rid):
@@ -1217,8 +1226,10 @@ def review_edit(rid):
 
     :reqheader Content-Type: application/json
     :param int rid: Review ID.
-    :jsonparam string content: Content of the review.\
-        Must be at least :py:obj:`.MIN_REVIEW_LEN` characters
+    :jsonparam string title: New title of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_TITLE_LEN` characters.
+    :jsonparam string content: New content of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_CONTENT_LEN` characters.
     :jsonparam int rating: Rating of the item. Must be a positive integer.
 
     *** Response ***
@@ -1239,14 +1250,23 @@ def review_edit(rid):
         if review.uid != session['user']['uid']:
             raise InsufficientPrivileges
 
+        title = req.get('title')
         content = req.get('content')
         rating = int(req.get('rating'))
-        if content and len(content) < MIN_REVIEW_LEN:
+
+        if title and len(title) < MIN_REVIEW_TITLE_LEN:
+            raise BadJSONData("Title must be at least %d characters" %
+                              MIN_REVIEW_TITLE_LEN)
+
+        if content and len(content) < MIN_REVIEW_CONTENT_LEN:
             raise BadJSONData("Content must be at least %d characters" %
-                              MIN_REVIEW_LEN)
+                              MIN_REVIEW_CONTENT_LEN)
 
         if rating is not None and rating < 0:
             raise BadJSONData("Rating must be a positive integer.")
+
+        if title is not None:
+            review.title = title
 
         if content is not None:
             review.content = content
@@ -1297,7 +1317,6 @@ def wishtlist_list():
     Get the wishlist of a user.
 
     *** Request ***
-    :param int uid: User ID.
 
     *** Response ***
 
@@ -1309,10 +1328,9 @@ def wishtlist_list():
     """
     with db_scoped_session() as ses:
         user = ses.query(User).get(session['user']['uid'])
-
-        items = ses.query(WishList).filter_by(uid=user.uid).all()
-        res = [{'iid': iid} for _, iid in items]
-        return res
+        items = user.wishlist.all()
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, items)
 
 
 @api_mod.route("/wishlist/add", methods=["POST"])
@@ -1380,3 +1398,31 @@ def wishlist_delete(iid):
         user.wishlist.remove(wishlist_item)
         ses.commit()
     return success_response
+
+
+@api_mod.route("/wishlist/clear")
+@require_login
+@require_json(request=False)
+def wishlist_clear():
+    """
+    Delete all entries in wishlists.
+
+    *** Request ***
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
+    with db_scoped_session() as ses:
+        user = ses.query(User).get(session['user']['uid'])
+        try:
+            for item in user.wishlist:
+                ses.delete(item)
+            ses.commit()
+        except Exception as e:
+            ses.rollback()
+            raise e
+        # TODO: Add databse exception
+        return success_response

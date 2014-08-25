@@ -105,6 +105,18 @@ INSERT INTO "USER" VALUES(81,'testing-1.0.272','pbkdf2:sha1:1000$6AGJILbe$85b6da
 INSERT INTO "USER" VALUES(82,'testing-1.0.275','pbkdf2:sha1:1000$84gpoIgS$073a86614f78e48a2b0962aab988acce4830c12c','testing_update 1.0.275',11,'author_identifier',0,100,'privatekey');
 INSERT INTO "USER" VALUES(83,'testing-1.0.276','pbkdf2:sha1:1000$aZkBS9he$af7294e278ea5454344cd36add808c8db2db2417','testing_update 1.0.276',11,'author_identifier',0,100,'privatekey');
 INSERT INTO "USER" VALUES(84,'testing-1.0.277','pbkdf2:sha1:1000$uvdnodOp$7c0f8c63a81f2a6b9ab0d3c7a91affd4e6bd5ab6','testing_update 1.0.277',1,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(85,'testing-1.0.280','pbkdf2:sha1:1000$Oe44OZFI$920ee25bea2d7c9bf60ebdfb7a78dd16e4cff667','testing_update 1.0.280',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(86,'testing-1.0.281','pbkdf2:sha1:1000$vPIbrOwZ$143374c20ae765cc49337a203d27587400e26938','testing_update 1.0.281',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(87,'testing-1.0.283','pbkdf2:sha1:1000$AyHwuiEn$480b35acabccb4646713a290ef213c480c557f04','test-1.0.283@imods.com',10,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(88,'testing-1.0.284','pbkdf2:sha1:1000$OCweoErX$8fa1b3235d52c25e2dd7e23df3b59dcd1eab10bf','test-1.0.284@imods.com',10,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(89,'testing-1.0.365','pbkdf2:sha1:1000$wF0vuxrY$4217411a45161283c2a60ad66f8b14ce57caf3c0','test-1.0.365@imods.com',10,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(90,'testing-1.0.366','pbkdf2:sha1:1000$laepyMZ0$941a95242452961e4a9cae372263ce3e44865c20','test-1.0.366@imods.com',10,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(91,'testing-1.0.367','pbkdf2:sha1:1000$9wOzWL6p$b9a41dd944250751008e70e5a324cbf130fc8618','testing_update 1.0.367',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(92,'testing-1.0.370','pbkdf2:sha1:1000$2qGypGmZ$e89e4054f9ce0639b21ae5e9e0b1069911152782','testing_update 1.0.370',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(93,'testing-1.0.393','pbkdf2:sha1:1000$P6tfNw4r$91e44468f5560df7c6717ea235b03d520a7bc565','testing_update 1.0.393',1,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(94,'testing-1.0.394','pbkdf2:sha1:1000$JK8puu7I$37dbdc55cde5ef6754a68d3130af715aa27e2771','testing_update 1.0.394',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(95,'testing-1.0.416','pbkdf2:sha1:1000$ThqLTB1F$fca28d8693a98a36612fe539d535e52fedaf40af','testing_update 1.0.416',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(96,'testing-1.0.418','pbkdf2:sha1:1000$CDKLjlSN$8b20226ce107a88d80dbb172f6687d7402230fe5','testing_update 1.0.418',11,'author_identifier',0,100,'privatekey');
 CREATE TABLE "ITEM" (
 	iid INTEGER NOT NULL, 
 	category_id INTEGER, 
@@ -142,6 +154,7 @@ CREATE TABLE "BILLING_INFO" (
 	PRIMARY KEY (bid), 
 	FOREIGN KEY(uid) REFERENCES "USER" (uid)
 );
+INSERT INTO "BILLING_INFO" VALUES(1,3,'address',12345,'kent','ohio','usa','creditcard','3123123','2014-09-12','asdasd');
 CREATE TABLE "DEVICE" (
 	dev_id INTEGER NOT NULL, 
 	uid INTEGER, 
@@ -157,7 +170,9 @@ CREATE TABLE "REVIEW" (
 	uid INTEGER, 
 	iid INTEGER, 
 	rating INTEGER NOT NULL, 
-	content VARCHAR(2000) NOT NULL, 
+    title VARCHAR(50) NOT NULL,
+	content VARCHAR(500) NOT NULL, 
+    add_date DATETIME NOT NULL,
 	PRIMARY KEY (rid), 
 	FOREIGN KEY(uid) REFERENCES "USER" (uid), 
 	FOREIGN KEY(iid) REFERENCES "ITEM" (iid)
@@ -168,6 +183,7 @@ CREATE TABLE "WISHLIST" (
 	FOREIGN KEY(uid) REFERENCES "USER" (uid), 
 	FOREIGN KEY(iid) REFERENCES "ITEM" (iid)
 );
+INSERT INTO "WISHLIST" VALUES(5,2);
 CREATE TABLE "ORDER" (
 	oid INTEGER NOT NULL, 
 	uid INTEGER, 
@@ -184,4 +200,15 @@ CREATE TABLE "ORDER" (
 	FOREIGN KEY(pkg_name) REFERENCES "ITEM" (pkg_name), 
 	FOREIGN KEY(billing_id) REFERENCES "BILLING_INFO" (bid)
 );
+INSERT INTO "ORDER" VALUES(1,3,'sdasd',1,1,'USD',0.99,2,1.99,'2014-08-21 20:20:25.000000');
+INSERT INTO "ORDER" VALUES(2,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:29:20.712443');
+INSERT INTO "ORDER" VALUES(3,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:31:36.888984');
+INSERT INTO "ORDER" VALUES(4,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:35:16.488148');
+INSERT INTO "ORDER" VALUES(5,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:39:17.132812');
+INSERT INTO "ORDER" VALUES(6,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:52:16.281164');
+INSERT INTO "ORDER" VALUES(7,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:53:19.831478');
+INSERT INTO "ORDER" VALUES(8,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:55:28.454760');
+INSERT INTO "ORDER" VALUES(9,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:57:51.321666');
+INSERT INTO "ORDER" VALUES(10,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 22:44:57.910885');
+INSERT INTO "ORDER" VALUES(11,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 22:45:35.324768');
 COMMIT;

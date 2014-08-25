@@ -513,13 +513,18 @@ class TestRoutes(unittest.TestCase):
             json2 = json.loads(rv1.data)
 
             # review 1
-            review1 = dict(iid=json2['iid'], content="review1", rating=10)
+            review1 = dict(iid=json2['iid'],
+                           title="review title 1",
+                           content="review content content 1",
+                           rating=10)
             rv2 = self.post_json(server, "/api/review/add", review1)
             assert rv2.status_code == 200
             json2 = json.loads(rv2.data)
             assert json2['uid'] == user1['uid']
+            assert json2['title'] == review1['title']
             assert json2['content'] == review1['content']
             assert json2['rating'] == review1['rating']
+            assert json2['user']['fullname'] == user1['fullname']
 
             # list review
             rv2 = server.get("/api/review/list?uid=%d&iid=%d" %
@@ -528,14 +533,17 @@ class TestRoutes(unittest.TestCase):
             json3 = json.loads(rv2.data)
             assert json3[0]['uid'] == json2['uid']
             assert json3[0]['iid'] == json2['iid']
+            assert json3[0]['title'] == json2['title']
             assert json3[0]['content'] == json2['content']
             assert json3[0]['rating'] == json2['rating']
+            assert json3[0]['user']['fullname'] == user1['fullname']
 
             # edit review
             review2 = copy(json2)
-            review2['content'] = 'review2'
+            review2['title'] = 'review title 2'
+            review2['content'] = 'review content content 2'
             review2['rating'] = 0
-            rv3 = self.post_json(server, "/api/review/edit/%d" %
+            rv3 = self.post_json(server, "/api/review/update/%d" %
                                  review2['rid'], review2)
             assert rv3.status_code == 200
 
@@ -584,11 +592,26 @@ class TestRoutes(unittest.TestCase):
             assert rv3.status_code == 200
             json2 = json.loads(rv3.data)
             assert len(json2) == 1
-            assert json2[0]['iid'] == data2['iid']
+            assert json2[0]['iid'] == json1['iid']
+            assert json2[0]['pkg_name'] == data1['pkg_name']
 
             # delete from wishlist
             rv4 = server.get("/api/wishlist/delete/%d" % json2[0]['iid'])
             assert rv4.status_code == 200
+
+            rv2 = self.post_json(server, "/api/wishlist/add", data2)
+            assert rv2.status_code == 200
+
+            rv2 = self.post_json(server, "/api/wishlist/add", data2)
+            assert rv2.status_code == 200
+
+            rv4 = server.get("/api/wishlist/clear")
+            assert rv4.status_code == 200
+
+            rv4 = server.get("/api/wishlist")
+            assert rv4.status_code == 200
+            json4 = json.loads(rv4.data)
+            assert len(json4) == 0
 
 if __name__ == "__main__":
     unittest.main()
