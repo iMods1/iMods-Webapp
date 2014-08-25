@@ -524,7 +524,7 @@ def category_delete(cid):
 
 
 @api_mod.route("/billing/list", defaults={'bid': None})
-@api_mod.route("/billing/<int:bid>")
+@api_mod.route("/billing/id/<int:bid>")
 @require_login
 @require_json(request=False)
 def billing_list(bid):
@@ -968,7 +968,7 @@ def order_add():
 
 
 @api_mod.route("/order/list", defaults={"oid": None})
-@api_mod.route("/order/<int:oid>")
+@api_mod.route("/order/id/<int:oid>")
 @require_login
 @require_json(request=False)
 def order_list(oid):
@@ -1190,7 +1190,7 @@ def review_add():
     title = req.get('title')
     content = req.get('content')
     rating = req.get('rating')
-    if iid is None or content is None or rating is None:
+    if iid is None or content is None or rating is None or title:
         raise BadJSONData
 
     if User.query.get(uid) is None\
