@@ -1,7 +1,7 @@
 from flask import request, session, Blueprint, json
 from werkzeug import check_password_hash, generate_password_hash
 from imods.models import User, Order, Item, Device, Category, BillingInfo
-from imods.models import UserRole, OrderStatus, Review
+from imods.models import UserRole, OrderStatus, Review, WishList
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session
@@ -11,6 +11,7 @@ from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
 from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
 from imods.api.exceptions import CategorySelfParent, BadJSONData
 from imods.api.exceptions import CategoryNameReserved, InternalException
+from imods.api.exceptions import ResourceUniqueError
 from datetime import datetime
 import os
 import operator
@@ -1329,8 +1330,7 @@ def wishtlist_list():
     with db_scoped_session() as ses:
         user = ses.query(User).get(session['user']['uid'])
         items = user.wishlist.all()
-        get_public = operator.methodcaller('get_public')
-        return map(get_public, items)
+        return [wl.item.get_public() for wl in items]
 
 
 @api_mod.route("/wishlist/add", methods=["POST"])
@@ -1352,6 +1352,7 @@ def wishlist_add():
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound` Item not found.
     :status 405: :py:exc:`.BadJSONData`
+    :status 409: :py:exc:`.ResourceUniqueError`
     """
     req = request.get_json()
     iid = req.get('iid')
@@ -1365,7 +1366,14 @@ def wishlist_add():
             raise ResourceIDNotFound("Item ID not found.")
 
         user = ses.query(User).get(session['user']['uid'])
-        user.wishlist.append(item)
+        already_exists = ses.query(WishList)\
+            .filter_by(uid=user.uid, iid=item.iid)\
+            .first()
+        if already_exists:
+            raise ResourceUniqueError
+        wishlist_item = WishList()
+        wishlist_item.item = item
+        user.wishlist.append(wishlist_item)
         ses.commit()
     return success_response
 
@@ -1390,12 +1398,12 @@ def wishlist_delete(iid):
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
     with db_scoped_session() as ses:
-        user = ses.query(User).get(session['user']['uid'])
-        wishlist_item = ses.query(Item).get(iid)
+        uid = session['user']['uid']
+        wishlist_item = ses.query(WishList).filter_by(iid=iid, uid=uid).first()
         if wishlist_item is None:
-            raise ResourceIDNotFound("Item ID not found")
+            raise ResourceIDNotFound("Item not found in wishlist")
 
-        user.wishlist.remove(wishlist_item)
+        ses.delete(wishlist_item)
         ses.commit()
     return success_response
 
@@ -1418,8 +1426,8 @@ def wishlist_clear():
     with db_scoped_session() as ses:
         user = ses.query(User).get(session['user']['uid'])
         try:
-            for item in user.wishlist:
-                ses.delete(item)
+            for wl in user.wishlist:
+                ses.delete(wl)
             ses.commit()
         except Exception as e:
             ses.rollback()
