@@ -1,9 +1,10 @@
 from imods import db
 from imods.models import User, BillingInfo, Category, Device, Item, Order
 from imods.models import UserRole, BillingType, OrderStatus, Review
-from flask.ext.admin import Admin, expose, helpers, AdminIndexView
+from imods.helpers import db_scoped_session
+from flask.ext.admin import Admin, expose, helpers, AdminIndexView, BaseView
 from flask.ext.admin.contrib.sqla import ModelView
-from flask import session, redirect, url_for, request
+from flask import session, redirect, url_for, request, render_template
 from werkzeug import check_password_hash, generate_password_hash
 import wtforms as wtf
 
@@ -147,6 +148,12 @@ class LoginForm(wtf.form.Form):
     def get_user(self):
         return User.query.filter_by(email=self.email.data).first()
 
+class PackageAssetsUploadForm(wtf.form.Form):
+    item_id = wtf.fields.SelectField(u"Item", coerce=int)
+    app_icon = wtf.fields.FileField(u"App Icon",
+            validators=[wtf.validators.regexp(r'^[^./\\]+\.(jpg|png|gif)$')])
+    screenshot = wtf.fields.FileField(u"Screenshot",
+            validators=[wtf.validators.regexp(r'^[^/\\]\.(jpg|png|gif)$')])
 
 class iModsAdminIndexView(AdminIndexView):
     @expose('/')
@@ -177,6 +184,25 @@ class iModsAdminIndexView(AdminIndexView):
             del session['user']
         return redirect(url_for(".index"))
 
+class PackageAssetsView(BaseView):
+    template_name = u"package_assets.html"
+
+    @expose('/', methods=["GET", "POST"])
+    def index(self):
+        form = PackageAssetsUploadForm(request.form)
+        if helpers.validate_form_on_submit(form):
+            # TODO: handle file uploads to S3
+            return redirect(url_for('admin.index'))
+
+        # Populate choices for select field
+        with db_scoped_session() as s:
+            items = s.query(Item).all()
+            form.item_id.choices = [(item.iid, item.display_name)
+                                                for item in items]
+
+        context = { 'form': form }
+        return self.render(self.template_name, **context)
+
 
 imods_admin = Admin(name="iMods Admin",
                     index_view=iModsAdminIndexView(),
@@ -188,3 +214,4 @@ imods_admin.add_view(CategoryView(db.session))
 imods_admin.add_view(ItemView(db.session))
 imods_admin.add_view(OrderView(db.session))
 imods_admin.add_view(ReviewView(db.session))
+imods_admin.add_view(PackageAssetsView(name="Manage Assets"))
