@@ -3,9 +3,11 @@
 """
 from flask import Flask
 from flask.ext.sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CsrfProtect
 import os
 
 app = Flask(__name__)
+CsrfProtect(app)
 
 # This is needed when testing by wercker CI, otherwise, 'config' object won't be
 # found.

@@ -2,9 +2,9 @@
 {% block body %}
 {{ super() }}
 <div class="row-fluid">
-  <form method="POST" action="">
+  <form method="POST" action="" enctype="multipart/form-data">
     <fieldset>
-    {{ form.hidden_tag() if form.hidden_tag }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     {% for f in form if f.type != 'CSRFTokenField' %}
     <div>
     {{ f.label }}
