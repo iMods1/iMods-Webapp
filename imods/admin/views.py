@@ -1,13 +1,26 @@
-from imods import db
+from imods import db, app
 from imods.models import User, BillingInfo, Category, Device, Item, Order
 from imods.models import UserRole, BillingType, OrderStatus, Review
-from imods.helpers import db_scoped_session
+from imods.helpers import db_scoped_session, generate_bucket_key
 from flask.ext.admin import Admin, expose, helpers, AdminIndexView, BaseView
 from flask.ext.admin.contrib.sqla import ModelView
 from flask import session, redirect, url_for, request, render_template
 from werkzeug import check_password_hash, generate_password_hash
 import wtforms as wtf
+from flask.ext.wtf import Form as ExtForm
+import boto
+import os
 
+def checkfile(form, field):
+    if field.data:
+        filename=field.data.name.lower()
+
+        ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg',
+                                                'gif'])
+        if not ('.' in filename and filename.rsplit('.',1)[1] in ALLOWED_EXTENSIONS):
+            raise ValidationError('Wrong Filetype, you can upload only png,jpg,jpeg,gif files')
+        else:
+            raise ValidationError('field not Present')
 
 class UserView(ModelView):
     form_overrides = dict(role=wtf.SelectField,
@@ -148,12 +161,10 @@ class LoginForm(wtf.form.Form):
     def get_user(self):
         return User.query.filter_by(email=self.email.data).first()
 
-class PackageAssetsUploadForm(wtf.form.Form):
+class PackageAssetsUploadForm(ExtForm):
     item_id = wtf.fields.SelectField(u"Item", coerce=int)
-    app_icon = wtf.fields.FileField(u"App Icon",
-            validators=[wtf.validators.regexp(r'^[^./\\]+\.(jpg|png|gif)$')])
-    screenshot = wtf.fields.FileField(u"Screenshot",
-            validators=[wtf.validators.regexp(r'^[^/\\]\.(jpg|png|gif)$')])
+    app_icon = wtf.fields.FileField(u"App Icon", validators=[checkfile])
+    screenshot = wtf.fields.FileField(u"Screenshot", validators=[checkfile])
 
 class iModsAdminIndexView(AdminIndexView):
     @expose('/')
@@ -189,16 +200,41 @@ class PackageAssetsView(BaseView):
 
     @expose('/', methods=["GET", "POST"])
     def index(self):
+
         form = PackageAssetsUploadForm(request.form)
-        if helpers.validate_form_on_submit(form):
-            # TODO: handle file uploads to S3
-            return redirect(url_for('admin.index'))
 
         # Populate choices for select field
         with db_scoped_session() as s:
             items = s.query(Item).all()
             form.item_id.choices = [(item.iid, item.display_name)
                                                 for item in items]
+
+            if helpers.validate_form_on_submit(form):
+                from boto.s3.key import Key
+                # Get file data from request.files
+                app_icon = request.files["app_icon"]
+                screenshot = request.files["screenshot"]
+                # Get pkg_assets_path
+                item = s.query(Item).get(form.item_id.data)
+                base_path = item.pkg_assets_path
+
+                # Connect to S3 Bucket
+                s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
+                bucket = s3.get_bucket('imods_package')
+
+                # Upload icon
+                icon = bucket.new_key(generate_bucket_key(base_path, "app_icon",
+                                        app_icon.filename))
+                icon.set_contents_from_string(app_icon.read())
+
+                # Upload screenshot
+                sshot = bucket.new_key(generate_bucket_key(base_path,
+                                        "screenshot",
+                                        screenshot.filename))
+                sshot.set_contents_from_string(screenshot.read())
+
+                return redirect(url_for('admin.index'))
+
 
         context = { 'form': form }
         return self.render(self.template_name, **context)
@@ -215,3 +251,4 @@ imods_admin.add_view(ItemView(db.session))
 imods_admin.add_view(OrderView(db.session))
 imods_admin.add_view(ReviewView(db.session))
 imods_admin.add_view(PackageAssetsView(name="Manage Assets"))
+
