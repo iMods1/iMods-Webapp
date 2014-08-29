@@ -29,3 +29,5 @@ DATABASE_CONNECT_OPTIONS = {}
 
 CSRF_ENABLED = True
 CSRF_SESSION_KEY = "somethingimpossibletoguess"
+
+BOTO_PROFILE = 'imods_testing'
