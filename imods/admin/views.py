@@ -9,6 +9,7 @@ from werkzeug import check_password_hash, generate_password_hash
 import wtforms as wtf
 from flask.ext.wtf import Form as ExtForm
 import boto
+from os import path
 
 
 def checkfile(form, field):
@@ -21,8 +22,6 @@ def checkfile(form, field):
         if not ('.' in filename and ext in ALLOWED_EXTENSIONS):
             raise wtf.validators.ValidationError(
                 'Wrong Filetype, you can upload only png,jpg,jpeg,gif files')
-        else:
-            raise wtf.validators.ValidationError('field not Present')
 
 
 class UserView(ModelView):
@@ -167,8 +166,10 @@ class LoginForm(wtf.form.Form):
 
 class PackageAssetsUploadForm(ExtForm):
     item_id = wtf.fields.SelectField(u"Item", coerce=int)
-    app_icon = wtf.fields.FileField(u"App Icon", validators=[checkfile])
-    screenshot = wtf.fields.FileField(u"Screenshot", validators=[checkfile])
+    app_icon = wtf.fields.FileField(u"App Icon",
+                                    validators=[checkfile])
+    screenshot = wtf.fields.FileField(u"Screenshot",
+                                      validators=[checkfile])
 
 
 class iModsAdminIndexView(AdminIndexView):
@@ -222,7 +223,13 @@ class PackageAssetsView(BaseView):
                 screenshot = request.files["screenshot"]
                 # Get pkg_assets_path
                 item = s.query(Item).get(form.item_id.data)
-                base_path = item.pkg_assets_path
+                base_path = path.join(
+                    "packages",
+                    item.pkg_name,
+                    str(item.pkg_version),
+                    'assets')
+                item.pkg_assets_path = base_path
+                s.commit()
 
                 # Connect to S3 Bucket
                 s3 = boto.connect_s3(

@@ -4,7 +4,7 @@
 <div class="row-fluid">
   <form method="POST" action="" enctype="multipart/form-data">
     <fieldset>
-    <!--<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>-->
+    {{ form.csrf_token }}
     {% for f in form if f.type != 'CSRFTokenField' %}
     <div>
     {{ f.label }}
