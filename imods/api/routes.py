@@ -383,7 +383,7 @@ def category_list(cid, name):
         categories = categories.all()
         result = {}
         for cat in categories:
-            result[cat.cid] = cat
+            result[cat.cid] = cat.get_public()
         return result
 
 
