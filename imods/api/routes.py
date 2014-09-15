@@ -381,10 +381,8 @@ def category_list(cid, name):
         categories.limit(limit)
         categories.offset(limit*page)
         categories = categories.all()
-        result = {}
-        for cat in categories:
-            result[cat.cid] = cat.get_public()
-        return result
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, categories)
 
 
 @api_mod.route("/category/featured")
