@@ -8,7 +8,8 @@ DEBUG = False
 ADMINS = [
     {
         'email': 'imods@imods.com',
-        'password': 'iModsAdmin123'
+        'password': 'iModsAdmin123',
+        'author_id': 'imodsadmin'
     }
 ]
 
@@ -18,6 +19,9 @@ DEFAULT_CATEGORIES = [
         'description': 'featured apps',
     },
 ]
+
+UPLOAD_PATH = "/tmp/imods"
+
 SECRET_KEY = 'h\xcf\x08MW\x8d"\xde\xe5\xc1V\'\xa8(\x96\x910v\x14\x12#\xa1\x91K'
 
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')

@@ -1432,3 +1432,53 @@ def wishlist_clear():
             raise e
         # TODO: Add databse exception
         return success_response
+
+
+@api_mod.route("/package/install", methods=["POST"])
+@require_json()
+def package_install():
+    """
+    Calculates dependencies of a package and returns a list of packages need to
+    be installed.
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :jsonparam array pkg_names: A list of names of the packages to be installed
+    :jsonparam array installed_pkgs: A list of packages that already installed\
+        on the client.
+    :jsonparam str installed_pkgs[x].pkg_name: The name of an installed package
+    :jsonparam str installed_pkgs[x].pkg_ver: The version of an installed package
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam array pkg_list: The calculated list of packages to be installed
+
+    :status 200: no error: :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.BadJSONData`
+    """
+    with db_scoped_session() as ses:
+        req = request.json
+        if req.get("pkg_names") is None:
+            raise BadJSONData("`pkg_names` field not found.")
+        if type(req["pkg_names"]) is not list:
+            raise BadJSONData("`pkg_names` must be a list of package names.")
+
+        target_pkgs = {}
+        for pkg_name in req["pkg_names"]:
+            pkg = ses.query(Item).filter_by(pkg_name=pkg_name).first()
+            if pkg is None:
+                raise ResourceIDNotFound()
+            target_pkgs[pkg_name] = pkg
+
+        # Build dependency graph
+        class Pkg(objcet):
+            def __init__(self, name, version):
+                self.pkg_name = name
+                self.pkg_version = version
+                self.deps = []
+
+            def compareVersion(self, pkg):
+                pass

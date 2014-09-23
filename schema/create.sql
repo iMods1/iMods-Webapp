@@ -117,6 +117,13 @@ INSERT INTO "USER" VALUES(93,'testing-1.0.393','pbkdf2:sha1:1000$P6tfNw4r$91e444
 INSERT INTO "USER" VALUES(94,'testing-1.0.394','pbkdf2:sha1:1000$JK8puu7I$37dbdc55cde5ef6754a68d3130af715aa27e2771','testing_update 1.0.394',11,'author_identifier',0,100,'privatekey');
 INSERT INTO "USER" VALUES(95,'testing-1.0.416','pbkdf2:sha1:1000$ThqLTB1F$fca28d8693a98a36612fe539d535e52fedaf40af','testing_update 1.0.416',11,'author_identifier',0,100,'privatekey');
 INSERT INTO "USER" VALUES(96,'testing-1.0.418','pbkdf2:sha1:1000$CDKLjlSN$8b20226ce107a88d80dbb172f6687d7402230fe5','testing_update 1.0.418',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(97,'testing-1.0.422','pbkdf2:sha1:1000$fay2WEgV$cf6e28f28ff1da228ec59613210a2153e45c35aa','testing_update 1.0.422',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(98,'testing-1.0.425','pbkdf2:sha1:1000$Juh2MRdl$7a775f39401139af7a52aba2fb98a6e8abca709c','testing_update 1.0.425',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(99,'testing-1.0.426','pbkdf2:sha1:1000$HqjJXZev$de1467642abcc888e92c621a7d72748306427c33','testing_update 1.0.426',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(100,'testing-1.0.427','pbkdf2:sha1:1000$KTJLit2i$4cb38d1b5ba01f618df8c079e9b72d676c858cb7','testing_update 1.0.427',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(101,'testing-1.0.428','pbkdf2:sha1:1000$zxaXZ71v$7676887dfc5dc93340d2a5f5c0ec029fbd850470','testing_update 1.0.428',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(102,'testing-1.0.456','pbkdf2:sha1:1000$5dranyjl$f4776a1a5f9beeab2ea1e861e7c31af1e7085dd1','testing_update 1.0.456',11,'author_identifier',0,100,'privatekey');
+INSERT INTO "USER" VALUES(103,'testing-1.0.505','pbkdf2:sha1:1000$Ufwl9jf0$c34d6f8306356a5f804ba045e2d27b4fcd3b6001','test-1.0.505@imods.com',10,'author_identifier',0,100,'privatekey');
 CREATE TABLE "ITEM" (
 	iid INTEGER NOT NULL, 
 	category_id INTEGER, 
@@ -131,6 +138,7 @@ CREATE TABLE "ITEM" (
 	price FLOAT, 
 	summary VARCHAR(500), 
 	description VARCHAR, 
+    control VARCHAR,
 	add_date DATE NOT NULL, 
 	last_update_date DATE NOT NULL, 
 	PRIMARY KEY (iid), 
@@ -138,7 +146,6 @@ CREATE TABLE "ITEM" (
 	FOREIGN KEY(author_id) REFERENCES "USER" (author_identifier), 
 	UNIQUE (pkg_name)
 );
-INSERT INTO "ITEM" VALUES(1,1,NULL,'package1','package 1','0.1','aosidjoasdij','asdasdas','aosidjasodijaosidj','asdoiajsodiasjdoaisjd',0.99,'oisajdoasidj','oasijdoasijdasoidj','2014-08-18','2014-08-18');
 CREATE TABLE "BILLING_INFO" (
 	bid INTEGER NOT NULL, 
 	uid INTEGER, 
@@ -154,7 +161,6 @@ CREATE TABLE "BILLING_INFO" (
 	PRIMARY KEY (bid), 
 	FOREIGN KEY(uid) REFERENCES "USER" (uid)
 );
-INSERT INTO "BILLING_INFO" VALUES(1,3,'address',12345,'kent','ohio','usa','creditcard','3123123','2014-09-12','asdasd');
 CREATE TABLE "DEVICE" (
 	dev_id INTEGER NOT NULL, 
 	uid INTEGER, 
@@ -200,15 +206,4 @@ CREATE TABLE "ORDER" (
 	FOREIGN KEY(pkg_name) REFERENCES "ITEM" (pkg_name), 
 	FOREIGN KEY(billing_id) REFERENCES "BILLING_INFO" (bid)
 );
-INSERT INTO "ORDER" VALUES(1,3,'sdasd',1,1,'USD',0.99,2,1.99,'2014-08-21 20:20:25.000000');
-INSERT INTO "ORDER" VALUES(2,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:29:20.712443');
-INSERT INTO "ORDER" VALUES(3,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:31:36.888984');
-INSERT INTO "ORDER" VALUES(4,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:35:16.488148');
-INSERT INTO "ORDER" VALUES(5,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:39:17.132812');
-INSERT INTO "ORDER" VALUES(6,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:52:16.281164');
-INSERT INTO "ORDER" VALUES(7,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:53:19.831478');
-INSERT INTO "ORDER" VALUES(8,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:55:28.454760');
-INSERT INTO "ORDER" VALUES(9,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 20:57:51.321666');
-INSERT INTO "ORDER" VALUES(10,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 22:44:57.910885');
-INSERT INTO "ORDER" VALUES(11,3,'package1',1,1,'USD',0.99,2,1.99,'2014-08-21 22:45:35.324768');
 COMMIT;

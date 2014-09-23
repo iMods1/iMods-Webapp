@@ -20,6 +20,8 @@ DEFAULT_CATEGORIES = [
     },
 ]
 
+UPLOAD_PATH = "/tmp/imods"
+
 SECRET_KEY = 'somescretkey'  # Replace this in production
 
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')
