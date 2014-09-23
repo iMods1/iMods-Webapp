@@ -4,4 +4,6 @@ from .item import Item
 from .device import Device
 from .category import Category
 from .billing_info import BillingInfo
+from .review import Review
+from .wishlist import WishList
 from .constants import *

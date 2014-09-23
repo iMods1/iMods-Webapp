@@ -12,7 +12,7 @@ def require_json(**kwargs):
         @wraps(f)
         def wrapper(*args, **kwargs):
             if in_request and not request.get_json(force=True, silent=True):
-                raise BadJSONData()
+                raise BadJSONData
             if in_response:
                 r = f(*args, **kwargs)
                 if type(r) is list:

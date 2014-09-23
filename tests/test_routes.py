@@ -7,7 +7,7 @@ from tempfile import mkstemp
 import sys
 sys.path.append('')
 import imods
-from imods.models import UserRole, OrderStatus
+from imods.models import UserRole, OrderStatus, Category
 from imods.api.exceptions import *
 
 
@@ -20,6 +20,9 @@ class TestRoutes(unittest.TestCase):
         self.app = imods.app
         imods.init_db()
         self.db = imods.db
+        self.db.session.add(Category(name='featured',
+                                     description='Featured apps'))
+        self.db.session.commit()
 
     def tearDown(self):
         os.close(self.db_fd)
@@ -30,11 +33,12 @@ class TestRoutes(unittest.TestCase):
         return server.post(url, data=json.dumps(data),
                            content_type="application/json")
 
-    def user_register(self, server, name, email, pwd, age):
+    def user_register(self, server, name, email, pwd, age, author_id=None):
         data = json.dumps(dict(
             fullname=name,
             email=email,
             password=pwd,
+            author_id=author_id or email,
             age=int(age)
         ))
         return self.post_json(server, "/api/user/register", data)
@@ -187,30 +191,83 @@ class TestRoutes(unittest.TestCase):
             assert js2["name"] == data2["name"]
             assert js2["description"] == data2["description"]
 
+            with server.get("/api/category/name/%s" % data1['name']) as rv:
+                assert rv.status_code == 200
+                js = json.loads(rv.data)
+                assert js[0]['name'] == data1['name']
+
             data3 = copy(data1)
             data3["name"] = "category updated"
             data3["description"] = "description updated"
             rv3 = self.post_json(server,
-                                 "/api/category/%d/update" % js1["cid"], data3)
+                                 "/api/category/update/%d" % js1["cid"], data3)
             assert rv3.status_code == 200
             assert 'successful' in rv3.data
 
-            rv3 = server.get("/api/category/%d" % js2["cid"])
+            rv3 = server.get("/api/category/id/%d" % js2["cid"])
             assert rv3.status_code == 200
             js3 = json.loads(rv3.data)
             assert js3['parent_id'] == js1["cid"]
 
-            rv4 = server.get("/api/category/%d/delete" % js1["cid"])
+            rv4 = server.get("/api/category/delete/%d" % js1["cid"])
             assert rv4.status_code == CategoryNotEmpty.status_code
             assert 'not empty' in rv4.data
 
-            rv4 = server.get("/api/category/%d/delete" % js2["cid"])
+            rv4 = server.get("/api/category/delete/%d" % js2["cid"])
             assert rv4.status_code == 200
             assert 'successful' in rv4.data
 
-            rv5 = server.get("/api/category/%d" % js2["cid"])
+            rv5 = server.get("/api/category/id/%d" % js2["cid"])
             assert rv5.status_code == ResourceIDNotFound.status_code
             assert "not found" in rv5.data
+
+    def test_featured(self):
+        with self.app.test_client() as server:
+            self.user_register(server, "category_admin",
+                               "category@category.com", "category123", 99)
+            self.user_login(server, "category@category.com", "category123")
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.SiteAdmin
+
+            data1 = dict(
+                name="Featured",
+                description="description1"
+            )
+            with self.post_json(server, "/api/category/add", data1) as rv:
+                assert rv.status_code == 409
+                js = json.loads(rv.data)
+
+            cat_featured_id = None
+            with server.get("/api/category/featured") as rv:
+                assert rv.status_code == 200
+                js = json.loads(rv.data)
+                cat_featured_id = js['cid']
+
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
+
+            data_item = dict(
+                category_id=cat_featured_id,
+                pkg_name="package1",
+                pkg_version="version1",
+                display_name="Fine Package1",
+                price=0.99,
+                summary="summary1",
+                description="description1",
+                pkg_dependencies="dep1, dep2>0.5"
+            )
+            with self.post_json(server, "/api/item/add", data_item) as rv:
+                assert rv.status_code == 200
+
+            with server.get("/api/item/featured") as rv:
+                assert rv.status_code == 200
+                js = json.loads(rv.data)
+                assert len(js) == 1
+                item = js[0]
+                assert item['pkg_name'] == data_item['pkg_name']
+                assert item['pkg_version'] == data_item['pkg_version']
+                assert item['display_name'] == data_item['display_name']
 
     def test_billing(self):
         with self.app.test_client() as server:
@@ -224,11 +281,13 @@ class TestRoutes(unittest.TestCase):
             data1 = dict(
                 address="billing address1",
                 zipcode=12345,
+                city="city1",
                 state="state1",
                 country="country1",
                 type_="creditcard",
                 cc_no="2312321312312312",
                 cc_name="billing name1",
+                cc_cvv=123,
                 cc_expr="12/15"
             )
             rv1 = self.post_json(server, "/api/billing/add", data1)
@@ -237,16 +296,18 @@ class TestRoutes(unittest.TestCase):
             assert js1["uid"] == user["uid"]
             assert js1["address"] == data1["address"]
             assert js1["zipcode"] == data1["zipcode"]
+            assert js1["city"] == data1["city"]
             assert js1["state"] == data1["state"]
             assert js1["country"] == data1["country"]
             assert js1["type_"] == data1["type_"]
 
-            rv2 = server.get("/api/billing/%d" % js1["bid"])
+            rv2 = server.get("/api/billing/id/%d" % js1["bid"])
             assert rv2.status_code == 200
             js2 = json.loads(rv2.data)
             assert js2["uid"] == user["uid"]
             assert js2["address"] == data1["address"]
             assert js2["zipcode"] == data1["zipcode"]
+            assert js2["city"] == data1["city"]
             assert js2["state"] == data1["state"]
             assert js2["country"] == data1["country"]
             assert js2["type_"] == data1["type_"]
@@ -255,27 +316,26 @@ class TestRoutes(unittest.TestCase):
             data2["address"] = "address updated"
             data2["zipcode"] = 312312
             data2["state"] = "state updated"
+            data2["city"] = "city updated"
             data2["country"] = "country updated"
             data2["type_"] = "paypal"
-            data2["cc_no"] = "19591233123"
-            data2["cc_name"] = "billing name updated"
-            data2["cc_expr"] = "05/18"
-            rv3 = self.post_json(server, "/api/billing/%d/update" % js2["bid"],
+            rv3 = self.post_json(server, "/api/billing/update/%d" % js2["bid"],
                                          data2)
             assert rv3.status_code == 200
             assert "successful" in rv3.data
 
-            rv4 = server.get("/api/billing/%d" % js2["bid"])
+            rv4 = server.get("/api/billing/id/%d" % js2["bid"])
             assert rv4.status_code == 200
             js4 = json.loads(rv4.data)
             assert js4["uid"] == js2["uid"]
             assert js4["address"] == data2["address"]
             assert js4["zipcode"] == data2["zipcode"]
+            assert js4["city"] == data2["city"]
             assert js4["state"] == data2["state"]
             assert js4["country"] == data2["country"]
             assert js4["type_"] == data2["type_"]
 
-            rv5 = server.get("/api/billing/%d/delete" % js2["bid"])
+            rv5 = server.get("/api/billing/delete/%d" % js2["bid"])
             assert rv5.status_code == 200
             assert 'successful' in rv5.data
 
@@ -289,6 +349,9 @@ class TestRoutes(unittest.TestCase):
                                       "item123", 33)
             user = json.loads(user.data)
             self.user_login(server, "item1@item.com", "item123")
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
 
             data1 = dict(
                 pkg_name="package1",
@@ -319,12 +382,12 @@ class TestRoutes(unittest.TestCase):
             data2["summary"] = "summary1 updated"
             data2["description"] = "description1 updated"
             data2["pkg_dependencies"] = "dep3, dep5<2.0"
-            rv2 = self.post_json(server, "/api/item/%d/update" % js1["iid"],
+            rv2 = self.post_json(server, "/api/item/update/%d" % js1["iid"],
                                  data2)
             assert rv2.status_code == 200
             assert 'successful' in rv2.data
 
-            rv2 = server.get("/api/item/%d" % js1["iid"])
+            rv2 = server.get("/api/item/id/%d" % js1["iid"])
             assert rv2.status_code == 200
             js2 = json.loads(rv2.data)
             assert js2["pkg_name"] == data2["pkg_name"]
@@ -335,11 +398,11 @@ class TestRoutes(unittest.TestCase):
             assert js2["description"] == data2["description"]
             assert js2["pkg_dependencies"] == data2["pkg_dependencies"]
 
-            rv3 = server.get("/api/item/%d/delete" % js1["iid"])
+            rv3 = server.get("/api/item/delete/%d" % js1["iid"])
             assert rv3.status_code == 200
             assert 'successful' in rv3.data
 
-            rv4 = server.get("/api/item/%d" % js1["iid"])
+            rv4 = server.get("/api/item/id/%d" % js1["iid"])
             assert rv4.status_code == ResourceIDNotFound.status_code
             assert 'not found' in rv4.data
 
@@ -351,6 +414,9 @@ class TestRoutes(unittest.TestCase):
             user = json.loads(user.data)
             rv = self.user_login(server, "order1@order.com", "order123")
             assert rv.status_code == 200
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
 
             data1 = dict(
                 pkg_name="package_item1",
@@ -369,6 +435,7 @@ class TestRoutes(unittest.TestCase):
                 address="billing address1",
                 zipcode=12345,
                 state="state1",
+                city="city1",
                 country="country1",
                 type_="creditcard",
                 cc_no="2312321312312312",
@@ -394,8 +461,10 @@ class TestRoutes(unittest.TestCase):
             assert js1["total_charged"] == data3["total_charged"]
             assert js1["quantity"] == 1
             assert js1["currency"] == "USD"
+            assert js1["item"]["pkg_name"] == data1["pkg_name"]
+            assert js1["billing"]["address"] == data2["address"]
 
-            rv2 = server.get("/api/order/%d" % js1["oid"])
+            rv2 = server.get("/api/order/id/%d" % js1["oid"])
             assert rv2.status_code == 200
             js2 = json.loads(rv2.data)
             assert js2["billing_id"] == data3["billing_id"]
@@ -405,15 +474,144 @@ class TestRoutes(unittest.TestCase):
             assert js2["quantity"] == 1
             assert js2["currency"] == "USD"
 
-            rv3 = server.get("/api/order/%d/cancel" % js1["oid"])
+            rv3 = server.get("/api/order/cancel/%d" % js1["oid"])
             assert rv3.status_code == 200
             assert 'successful' in rv3.data
 
-            rv4 = server.get("/api/order/%d" % js1["oid"])
+            rv4 = server.get("/api/order/id/%d" % js1["oid"])
             js4 = json.loads(rv4.data)
             assert rv4.status_code == 200
             assert js4["status"] == OrderStatus.OrderCancelled
 
+    def test_review(self):
+        with self.app.test_client() as server:
+            # first user
+            user1 = self.user_register(server, "reviewer1",
+                                       "reviewer1@reviewer1.com",
+                                       "review123", 77)
+            assert user1.status_code == 200
+            user1 = json.loads(user1.data)
+            rv = self.user_login(server, "reviewer1@reviewer1.com", "review123")
+            assert rv.status_code == 200
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
+
+            # add review
+            # first package
+            data1 = dict(
+                pkg_name="package1",
+                pkg_version="version1",
+                display_name="Fine Package1",
+                price=0.99,
+                summary="summary1",
+                description="description1",
+                pkg_dependencies="dep1, dep2>0.5"
+            )
+            rv1 = self.post_json(server, "/api/item/add", data1)
+            assert rv1.status_code == 200
+            json2 = json.loads(rv1.data)
+
+            # review 1
+            review1 = dict(iid=json2['iid'],
+                           title="review title 1",
+                           content="review content content 1",
+                           rating=10)
+            rv2 = self.post_json(server, "/api/review/add", review1)
+            assert rv2.status_code == 200
+            json2 = json.loads(rv2.data)
+            assert json2['uid'] == user1['uid']
+            assert json2['title'] == review1['title']
+            assert json2['content'] == review1['content']
+            assert json2['rating'] == review1['rating']
+            assert json2['user']['fullname'] == user1['fullname']
+
+            # list review
+            rv2 = server.get("/api/review/list?uid=%d&iid=%d" %
+                             (user1['uid'], json2['iid']))
+            assert rv2.status_code == 200
+            json3 = json.loads(rv2.data)
+            assert json3[0]['uid'] == json2['uid']
+            assert json3[0]['iid'] == json2['iid']
+            assert json3[0]['title'] == json2['title']
+            assert json3[0]['content'] == json2['content']
+            assert json3[0]['rating'] == json2['rating']
+            assert json3[0]['user']['fullname'] == user1['fullname']
+
+            # edit review
+            review2 = copy(json2)
+            review2['title'] = 'review title 2'
+            review2['content'] = 'review content content 2'
+            review2['rating'] = 0
+            rv3 = self.post_json(server, "/api/review/update/%d" %
+                                 review2['rid'], review2)
+            assert rv3.status_code == 200
+
+            # delete
+            rv4 = server.get("/api/review/delete/%d" % json2['rid'])
+            assert rv4.status_code == 200
+
+    def test_wishlist(self):
+        with self.app.test_client() as server:
+            # first user
+            user1 = self.user_register(server, "reviewer1",
+                                       "reviewer1@reviewer1.com",
+                                       "review123", 77)
+            assert user1.status_code == 200
+            user1 = json.loads(user1.data)
+            rv = self.user_login(server, "reviewer1@reviewer1.com", "review123")
+            assert rv.status_code == 200
+            # Need app dev role to add an item
+            with server.session_transaction() as se:
+                se['user']['role'] = UserRole.AppDev
+
+            # add review
+            # first package
+            data1 = dict(
+                pkg_name="package1",
+                pkg_version="version1",
+                display_name="Fine Package1",
+                price=0.99,
+                summary="summary1",
+                description="description1",
+                pkg_dependencies="dep1, dep2>0.5"
+            )
+            rv1 = self.post_json(server, "/api/item/add", data1)
+            assert rv1.status_code == 200
+            json1 = json.loads(rv1.data)
+
+            # add to wishlist
+            data2 = dict(
+                iid=json1['iid']
+            )
+            rv2 = self.post_json(server, "/api/wishlist/add", data2)
+            assert rv2.status_code == 200
+
+            # list wishlist
+            rv3 = server.get("/api/wishlist")
+            assert rv3.status_code == 200
+            json2 = json.loads(rv3.data)
+            assert len(json2) == 1
+            assert json2[0]['iid'] == json1['iid']
+            assert json2[0]['pkg_name'] == data1['pkg_name']
+
+            # delete from wishlist
+            rv4 = server.get("/api/wishlist/delete/%d" % json2[0]['iid'])
+            assert rv4.status_code == 200
+
+            rv2 = self.post_json(server, "/api/wishlist/add", data2)
+            assert rv2.status_code == 200
+
+            rv4 = server.get("/api/wishlist/clear")
+            assert rv4.status_code == 200
+
+            rv4 = server.get("/api/wishlist")
+            assert rv4.status_code == 200
+            json4 = json.loads(rv4.data)
+            assert len(json4) == 0
+
+            rv2 = server.get("/api/item/id/%d" % json1["iid"])
+            assert rv2.status_code == 200
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,7 @@ class APIException(Exception):
 
 class InternalException(APIException):
     status_code = 500
+    message = "InternalException"
 
 
 def setup_api_exceptions(app):
@@ -50,6 +51,16 @@ class UserNotLoggedIn(APIException):
 class UserAlreadRegistered(APIException):
     status_code = 409
     message = 'User already registered'
+
+
+class ResourceUniqueError(APIException):
+    status_code = 409
+    message = 'Unique resource is already inserted'
+
+
+class CategoryNameReserved(APIException):
+    status_code = 409
+    message = 'Category name is reserved'
 
 
 class UserCredentialsDontMatch(APIException):

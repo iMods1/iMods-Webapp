@@ -1,15 +1,7 @@
-"""
-.. module:: routes
-    :synopsis: Endpoints of user API
-
-.. moduleauthor:: Ryan Feng <odayfans@gmail.com>
-
-"""
 from flask import request, session, Blueprint, json
 from werkzeug import check_password_hash, generate_password_hash
 from imods.models import User, Order, Item, Device, Category, BillingInfo
-from imods.models import UserRole, OrderStatus
-from imods.models.mixin import JSONSerialize
+from imods.models import UserRole, OrderStatus, Review, WishList
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session
@@ -18,6 +10,8 @@ from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
 from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
 from imods.api.exceptions import CategorySelfParent, BadJSONData
+from imods.api.exceptions import CategoryNameReserved, InternalException
+from imods.api.exceptions import ResourceUniqueError
 from datetime import datetime
 import os
 import operator
@@ -28,7 +22,14 @@ api_mod = Blueprint("api_mods", __name__, url_prefix="/api")
 setup_api_exceptions(api_mod)
 
 
-success_response = {'message': 'successful'}  #: A success_response
+success_response = {'status_code': 200, 'message': 'successful'}
+#: A success_response
+
+
+DEFAULT_LIMIT = 5
+MAX_LIMIT = 100
+MIN_REVIEW_CONTENT_LEN = 10
+MIN_REVIEW_TITLE_LEN = 4
 
 
 @api_mod.route("/user/profile")
@@ -134,7 +135,7 @@ def user_login():
                      'role': user.role,
                      'private_key': user.private_key}
         session['user'] = user_dict
-        return user.get_public()
+        return success_response
     raise UserCredentialsDontMatch()
 
 
@@ -152,7 +153,7 @@ def user_logout():
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     """
-    if session['user'] is not None:
+    if session.get('user') is not None:
         del session['user']
     return success_response
 
@@ -228,7 +229,8 @@ def user_update():
     data = dict(
         fullname=req.get("fullname") or user.fullname,
         age=req.get("age") or user.age,
-        author_identifier=req.get("author_identifier") or user.author_identifier,
+        author_identifier=req.get("author_identifier")
+        or user.author_identifier,
         password=pwd
     )
     with db_scoped_session() as se:
@@ -285,11 +287,11 @@ def device_add():
         return device.get_public()
 
 
-@api_mod.route("/device/list", defaults={"device_id": None})
+@api_mod.route("/device/list")
 @api_mod.route("/device/<int:device_id>")
 @require_login
 @require_json(request=False)
-def device_list(device_id):
+def device_list(device_id=None):
     """
     Get information of a device.
 
@@ -311,31 +313,85 @@ def device_list(device_id):
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
-    if device_id:
+    if device_id is not None:
         device = Device.query\
             .filter_by(uid=session['user']['uid'], dev_id=device_id)\
             .first()
         if not device:
-            raise ResourceIDNotFound()
+            raise ResourceIDNotFound
         return device.get_public()
-    elif device_id is None:
+    else:
         # List all devices
-        devices = Device.query.filter_by(uid=session['user']['uid']).all()
+        page = request.args.get('page') or 0
+        limit = request.args.get('limit') or DEFAULT_LIMIT
+        if limit > MAX_LIMIT:
+            limit = MAX_LIMIT
+        devices = Device.query
+        devices.limit(limit)
+        devices.offset(page * limit)
+        devices = devices.filter_by(uid=session['user']['uid']).all()
         get_public = operator.methodcaller('get_public')
         res = map(get_public, devices)
         return res
 
 
-@api_mod.route("/category/list", defaults={"cid": None})
-@api_mod.route("/category/<int:cid>")
+@api_mod.route("/category/list", defaults={"cid": None, "name": None})
+@api_mod.route("/category/id/<int:cid>", defaults={"name": None})
+@api_mod.route("/category/name/<name>", defaults={"cid": None})
 @require_json(request=False)
-def category_list(cid):
+def category_list(cid, name):
     """
     Get category information.
 
     *** Request ***
 
     :queryparam int cid: unique category ID number
+    :queryparam str name: category name
+
+    *** Response ***
+
+    :jsonparam int cid: category id
+    :jsonparam int parent_id: parent category id
+    :jsonparam string name: name of the category
+    :jsonparam string description: description of the category
+
+    _NOTE: /category/name/<name> returns a list(array) of categories_
+
+    :resheader Content-Type: application/js
+    :status 200: no error :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
+    if cid is not None:
+        category = Category.query.get(cid)
+        if not category:
+            raise ResourceIDNotFound
+        return category.get_public()
+    elif name is not None:
+        with db_scoped_session() as ses:
+            categories = ses.query(Category).filter_by(name=name).all()
+            get_public = operator.methodcaller('get_public')
+            return map(get_public, categories)
+    else:
+        # Return all categories
+        limit = request.args.get('limit') or DEFAULT_LIMIT
+        if limit > MAX_LIMIT:
+            limit = MAX_LIMIT
+        page = request.args.get('page') or 0
+        categories = Category.query
+        categories.limit(limit)
+        categories.offset(limit*page)
+        categories = categories.all()
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, categories)
+
+
+@api_mod.route("/category/featured")
+@require_json(request=False)
+def category_featured():
+    """
+    Get featured apps info.
+
+    *** Request ***
 
     *** Response ***
     :jsonparam int cid: category id
@@ -343,22 +399,18 @@ def category_list(cid):
     :jsonparam string name: name of the category
     :jsonparam string description: description of the category
 
-    :resheader Content-Type: application/js
+    :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
-    :status 404: :py:exc:`.ResourceIDNotFound`
+
+    _This method should always return 200._
     """
-    if cid:
-        category = Category.query.get(cid)
-        if not category:
-            raise ResourceIDNotFound
-        return category.get_public()
-    elif cid is None:
-        # Return all categories
-        categories = Category.query.all()
-        result = {}
-        for cat in categories:
-            result[cat.cid] = cat
-        return result
+    with db_scoped_session() as ses:
+        # TODO: cache featured category id or object
+        featured = ses.query(Category).filter_by(name='featured').all()
+        if len(featured) != 1:
+            raise InternalException("Featured category is not found or multiple\
+ instances are found.")
+        return featured[0].get_public()
 
 
 @api_mod.route("/category/add", methods=["POST"])
@@ -380,11 +432,14 @@ def category_add():
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 409: :py:exc:`.CategoryNameReserved`
     """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
     cat_name = req['name']
+    if cat_name.strip().lower() in Category.reservedNames:
+        raise CategoryNameReserved
     cat_parent_id = req.get('parent_id')
     cat_description = req.get('description', '')
     with db_scoped_session() as se:
@@ -396,7 +451,7 @@ def category_add():
         return category.get_public()
 
 
-@api_mod.route("/category/<int:cid>/update", methods=["POST"])
+@api_mod.route("/category/update/<int:cid>", methods=["POST"])
 @require_login
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json()
@@ -433,7 +488,7 @@ def category_update(cid):
     return success_response
 
 
-@api_mod.route("/category/<int:cid>/delete")
+@api_mod.route("/category/delete/<int:cid>")
 @require_login
 @require_privileges([UserRole.Admin, UserRole.SiteAdmin])
 @require_json(request=False)
@@ -467,7 +522,7 @@ def category_delete(cid):
 
 
 @api_mod.route("/billing/list", defaults={'bid': None})
-@api_mod.route("/billing/<int:bid>")
+@api_mod.route("/billing/id/<int:bid>")
 @require_login
 @require_json(request=False)
 def billing_list(bid):
@@ -493,14 +548,22 @@ def billing_list(bid):
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
-    if bid:
+    if bid is not None:
         billing = BillingInfo.query.get(bid)
         if not billing:
             raise ResourceIDNotFound()
         return billing.get_public()
     else:
-        billings = BillingInfo.query.all()
-        return map(JSONSerialize.get_public, billings)
+        limit = request.args.get("limit") or DEFAULT_LIMIT
+        if limit > MAX_LIMIT:
+            limit = MAX_LIMIT
+        page = request.args.get("page") or 0
+        billings = BillingInfo.query
+        billings.offset(page*limit)
+        billings.limit(limit)
+        billings = billings.all()
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, billings)
 
 
 @api_mod.route("/billing/add", methods=["POST"])
@@ -515,6 +578,7 @@ def billing_add():
     :jsonparam string address: billing address
     :jsonparam int zipcode: zipcode
     :jsonparam string state: state
+    :jsonparam string city: city
     :jsonparam string country: country
     :jsonparam string type_: payment method type, see :py:class:`.BillingType`
     :jsonparam string cc_no: credit card number, `optional`
@@ -535,13 +599,18 @@ def billing_add():
         req = dict(json.loads(req))
     uid = session['user']['uid']
     if req.get('cc_expr'):
-        cc_expr = datetime.strptime(req['cc_expr'], '%d/%y')
+        cc_expr = datetime.strptime(req['cc_expr'], '%m/%y')
     else:
         cc_expr = None
+    # TODO: Verify creditcard info before add it to database
+    cc_cvv = req.get('cc_cvv')
+    if cc_cvv:
+        del req['cc_cvv']
     billing = BillingInfo(uid=uid,
                           address=req['address'],
                           zipcode=req['zipcode'],
                           state=req['state'],
+                          city=req['city'],
                           country=req['country'],
                           type_=req['type_'],
                           cc_no=req.get('cc_no'),
@@ -553,7 +622,7 @@ def billing_add():
         return billing.get_public()
 
 
-@api_mod.route("/billing/<int:bid>/update", methods=["POST"])
+@api_mod.route("/billing/update/<int:bid>", methods=["POST"])
 @require_login
 @require_json()
 def billing_update(bid):
@@ -565,6 +634,7 @@ def billing_update(bid):
     :jsonparam string address: billing address
     :jsonparam int zipcode: zipcode
     :jsonparam string state: state
+    :jsonparam string city: city
     :jsonparam string country: country
     :jsonparam string type_: payment method type
     :jsonparam string cc_no: credit card number, `optional`
@@ -587,8 +657,15 @@ def billing_update(bid):
     if req.get('bid'):
         # Ignore bid in json data
         del req['bid']
+    if req.get('uid'):
+        # Ignore uid in json data
+        del req['uid']
     if req.get('cc_expr'):
         req['cc_expr'] = datetime.strptime(req['cc_expr'], '%d/%y')
+    # TODO: Verify creditcard info before add it to database
+    cc_cvv = req.get('cc_cvv')
+    if cc_cvv:
+        del req['cc_cvv']
     uid = session['user']['uid']
     billing = BillingInfo.query.filter_by(bid=bid, uid=uid).first()
     if not billing:
@@ -600,7 +677,7 @@ def billing_update(bid):
     return success_response
 
 
-@api_mod.route("/billing/<int:bid>/delete")
+@api_mod.route("/billing/delete/<int:bid>")
 @require_login
 @require_json(request=False)
 def billing_delete(bid):
@@ -629,15 +706,17 @@ def billing_delete(bid):
 
 
 @api_mod.route("/item/list", defaults={"iid": None})
-@api_mod.route("/item/<int:iid>")
+@api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None})
+@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None})
 @require_json(request=False)
-def item_list(iid):
+def item_list(iid, pkg_name):
     """
     Get information of an item.
 
     *** Request ***
 
     :query int iid: item id
+    :query str pkg_name: unique package name
 
     *** Response ***
 
@@ -659,18 +738,32 @@ def item_list(iid):
     :status 200: no error :py:obj:`.success_response`
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
-    if iid:
+    if iid is not None:
         item = Item.query.get(iid)
         if not item:
             raise ResourceIDNotFound
         return item.get_public()
+    elif pkg_name is not None:
+        item = Item.query.filter_by(pkg_name=pkg_name).first()
+        if not item:
+            raise ResourceIDNotFound
+        return item.get_public()
     else:
-        items = Item.query.all()
-        return map(JSONSerialize.get_public, items)
+        limit = request.args.get("limit") or DEFAULT_LIMIT
+        if limit > MAX_LIMIT:
+            limit = MAX_LIMIT
+        page = request.args.get("page") or 0
+        items = Item.query
+        items.offset(limit*page)
+        items.limit(limit)
+        items = items.all()
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, items)
 
 
 @api_mod.route("/item/add", methods=["POST"])
 @require_login
+@require_privileges([UserRole.AppDev])
 @require_json()
 def item_add():
     """
@@ -693,12 +786,14 @@ def item_add():
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
     """
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
     author_id = req.get("author_id") or session['user']['author_identifier']
-    item = Item(pkg_name=req['pkg_name'],
+    item = Item(category_id=req.get('category_id'),
+                pkg_name=req['pkg_name'],
                 pkg_version=req['pkg_version'],
                 display_name=req['display_name'],
                 author_id=author_id,
@@ -712,8 +807,9 @@ def item_add():
         return item.get_public()
 
 
-@api_mod.route("/item/<int:iid>/update", methods=["POST"])
+@api_mod.route("/item/update/<int:iid>", methods=["POST"])
 @require_login
+@require_privileges([UserRole.AppDev])
 @require_json()
 def item_update(iid):
     """
@@ -738,6 +834,7 @@ def item_update(iid):
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.InsufficientPrivileges`
     """
     req = request.get_json()
     if type(req) is not dict:
@@ -751,8 +848,9 @@ def item_update(iid):
     return success_response
 
 
-@api_mod.route("/item/<int:iid>/delete")
+@api_mod.route("/item/delete/<int:iid>")
 @require_login
+@require_privileges([UserRole.AppDev])
 @require_json(request=False)
 def item_delete(iid):
     """
@@ -768,6 +866,7 @@ def item_delete(iid):
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.InsufficientPrivileges`
     """
     author_id = session['user']['author_identifier']
     role = session['user']['role']
@@ -782,6 +881,21 @@ def item_delete(iid):
         else:
             raise InsufficientPrivileges()
     return success_response
+
+
+@api_mod.route("/item/featured")
+@require_json(request=False)
+def items_featured():
+    with db_scoped_session() as ses:
+        # TODO: cache featured category id or object
+        featured = ses.query(Category).filter_by(name='featured').all()
+        if len(featured) != 1:
+            raise InternalException("Featured category is not found or multiple\
+ instances are found.")
+        get_public = operator.methodcaller('get_public')
+        # TODO: cache featured items
+        items = featured[0].items.all()
+        return map(get_public, items)
 
 
 @api_mod.route("/order/add", methods=["POST"])
@@ -812,6 +926,8 @@ def order_add():
     :jsonparam float total_price: total price
     :jsonparam float total_charged: total charged
     :jsonparam string order_date: the date of order placed
+    :jsonparam dict billing: billing info
+    :jsonparam dict item: item info
 
     :reqheader Content-Type: application/json
     :resheader Content-Type: application/json
@@ -840,6 +956,7 @@ def order_add():
                       quantity=quantity, currency=currency,
                       total_price=req['total_price'],
                       total_charged=req['total_charged'])
+        # TODO: Calculate total and return back to client.
     except:
         raise
     with db_scoped_session() as se:
@@ -849,7 +966,7 @@ def order_add():
 
 
 @api_mod.route("/order/list", defaults={"oid": None})
-@api_mod.route("/order/<int:oid>")
+@api_mod.route("/order/id/<int:oid>")
 @require_login
 @require_json(request=False)
 def order_list(oid):
@@ -873,6 +990,8 @@ def order_list(oid):
     :jsonparam float total_price: total price
     :jsonparam float total_charged: total charged
     :jsonparam string order_date: the date of order placed
+    :jsonparam dict billing: billing info
+    :jsonparam dict item: item info
 
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
@@ -881,7 +1000,7 @@ def order_list(oid):
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
     uid = session['user']['uid']
-    if oid:
+    if oid is not None:
         order = Order.query.get(oid)
         if not order:
             raise ResourceIDNotFound()
@@ -890,17 +1009,24 @@ def order_list(oid):
         return order.get_public()
     else:
         # List all orders of a user
-        # TODO: Add paging
-        orders = Order.query.filter_by(uid=uid).all()
-        return map(JSONSerialize.get_public, orders)
+        limit = request.args.get("limit") or DEFAULT_LIMIT
+        if limit > MAX_LIMIT:
+            limit = MAX_LIMIT
+        page = request.args.get("page") or 0
+        orders = Order.query
+        orders.limit(limit)
+        orders.offset(limit*page)
+        orders = orders.filter_by(uid=uid).all()
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, orders)
 
 
-@api_mod.route("/order/<int:oid>/update", methods=["POST"])
+@api_mod.route("/order/update/<int:oid>", methods=["POST"])
 @require_login
 @require_json()
 def order_udpate(oid):
     """
-    Update an uncomplete order. Notice: an complete order cannot be changed.
+    Update an uncomplete order. Notice: a complete order cannot be changed.
 
     *** Request ***
 
@@ -935,7 +1061,7 @@ def order_udpate(oid):
     return success_response
 
 
-@api_mod.route("/order/<int:oid>/cancel")
+@api_mod.route("/order/cancel/<int:oid>")
 @require_login
 @require_json(request=False)
 def order_cancel(oid):
@@ -956,6 +1082,8 @@ def order_cancel(oid):
     :status 401: :py:exc:`.OrderNotChangable`
     """
     order = Order.query.get(oid)
+    if not order:
+        raise ResourceIDNotFound
     if order.status == OrderStatus.OrderCompleted:
         raise OrderNotChangable
     if not order:
@@ -966,3 +1094,391 @@ def order_cancel(oid):
         )
         se.commit()
     return success_response
+
+
+@api_mod.route("/review/list", defaults={'uid': None, 'iid': None})
+@api_mod.route("/review/user/<int:uid>", defaults={'iid': None})
+@api_mod.route("/review/item/<int:iid>", defaults={'uid': None})
+@require_json(request=False)
+def review_list(uid, iid):
+    """
+    Query reviews by user or item.
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :param int uid: User ID
+    :param int iid: item ID
+    :queryparam int uid: User ID
+    :queryparam int iid: Item ID
+
+    Note:
+    `/review/list?<int:uid>`
+    is equivalent to
+    `/review/user/<int:uid>`
+    the same to item id
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam int uid: User ID
+    :jsonparam int iid: Item ID
+    :jsonparam int rating: Rating of the item.
+    :jsonparam string content: The content of the review.
+
+    :status 200: no error, returns a list of reviews in JSON.
+    The list might be empty.
+    """
+    uid = uid or request.args.get('uid') or None
+    iid = iid or request.args.get('uid') or None
+    page = request.args.get("page") or 0
+    limit = request.args.get("limit") or DEFAULT_LIMIT
+    if limit > MAX_LIMIT:
+        limit = MAX_LIMIT
+    reviews = Review.query
+    reviews.offset(limit * page)
+    reviews.limit(limit)
+    if uid:
+        reviews = reviews.filter_by(uid=uid)
+    if iid:
+        reviews = reviews.filter_by(iid=iid)
+    reviews = reviews.all()
+    if len(reviews) < 1:
+        return []
+    get_public = operator.methodcaller('get_public')
+    return map(get_public, reviews)
+
+
+@api_mod.route("/review/add", methods=["POST"])
+@require_login
+@require_json()
+def review_add():
+    """
+    Add a new review.
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :jsonparam int uid: User ID
+    :jsonparam int iid: Item ID
+    :jsonparam string title: Title of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_TITLE_LEN` characters.
+    :jsonparam string content: Content of the review,\
+    must be at least :py:obj:`.MIN_REVIEW_CONTENT_LEN` characters.
+    :jsonparam int rating: Rating of the item
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam int rid: The ID of the newly added review.
+    :jsonparam int uid: User ID
+    :jsonparam int iid: Item ID
+    :jsonparam string content: Content of the review.
+    :jsonparam int rating: Rating of the item.
+    :jsonparam string add_date: date and time of the review was created
+
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 400: :py:exc:`.BadJSONData`
+    :status 404: :py:exc:`.ResourceIDNotFound` User or item is not found.
+    """
+    req = request.get_json()
+    uid = session['user']['uid']
+    iid = req.get('iid')
+    title = req.get('title')
+    content = req.get('content')
+    rating = req.get('rating')
+    if iid is None or content is None or rating is None or title is None:
+        raise BadJSONData
+
+    if User.query.get(uid) is None\
+            or Item.query.get(iid) is None:
+        raise ResourceIDNotFound
+
+    if int(rating) < 0:
+        raise BadJSONData("Rating must be a positive integer.")
+
+    if len(content) < MIN_REVIEW_CONTENT_LEN:
+        raise BadJSONData("Content must be at least %d characters"
+                          % MIN_REVIEW_CONTENT_LEN)
+
+    if len(title) < MIN_REVIEW_TITLE_LEN:
+        raise BadJSONData("Title must be at least %d characters"
+                          % MIN_REVIEW_TITLE_LEN)
+
+    with db_scoped_session() as ses:
+        review = Review(uid=uid, iid=iid, title=title,
+                        content=content, rating=rating)
+        ses.add(review)
+        ses.commit()
+        return review.get_public()
+
+
+@api_mod.route("/review/update/<int:rid>", methods=["POST"])
+@require_login
+@require_json()
+def review_edit(rid):
+    """
+    Edit a review.
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :param int rid: Review ID.
+    :jsonparam string title: New title of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_TITLE_LEN` characters.
+    :jsonparam string content: New content of the review.\
+        Must be at least :py:obj:`.MIN_REVIEW_CONTENT_LEN` characters.
+    :jsonparam int rating: Rating of the item. Must be a positive integer.
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exc:`.BadJSONData`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    """
+    req = request.get_json()
+    with db_scoped_session() as ses:
+        review = ses.query(Review).get(rid)
+        if review is None:
+            raise ResourceIDNotFound("Review not found")
+
+        if review.uid != session['user']['uid']:
+            raise InsufficientPrivileges
+
+        title = req.get('title')
+        content = req.get('content')
+        rating = int(req.get('rating'))
+
+        if title and len(title) < MIN_REVIEW_TITLE_LEN:
+            raise BadJSONData("Title must be at least %d characters" %
+                              MIN_REVIEW_TITLE_LEN)
+
+        if content and len(content) < MIN_REVIEW_CONTENT_LEN:
+            raise BadJSONData("Content must be at least %d characters" %
+                              MIN_REVIEW_CONTENT_LEN)
+
+        if rating is not None and rating < 0:
+            raise BadJSONData("Rating must be a positive integer.")
+
+        if title is not None:
+            review.title = title
+
+        if content is not None:
+            review.content = content
+
+        if rating is not None:
+            review.rating = rating
+
+        ses.commit()
+        return success_response
+
+
+@api_mod.route("/review/delete/<int:rid>")
+@require_login
+@require_json(request=False)
+def review_delete(rid):
+    """
+    Delete a review.
+
+    *** Request ***
+    :param int rid: Review ID
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    """
+    with db_scoped_session() as ses:
+        review = ses.query(Review).get(rid)
+        if review is None:
+            raise ResourceIDNotFound("Review ID not found")
+
+        if review.uid != session['user']['uid']:
+            raise InsufficientPrivileges
+
+        ses.delete(review)
+        ses.commit()
+    return success_response
+
+
+@api_mod.route("/wishlist")
+@require_login
+@require_json(request=False)
+def wishtlist_list():
+    """
+    Get the wishlist of a user.
+
+    *** Request ***
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam int iid: Item ID.
+
+    :status 200: no error, returns a list of item IDs
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
+    with db_scoped_session() as ses:
+        user = ses.query(User).get(session['user']['uid'])
+        items = user.wishlist.all()
+        return [wl.item.get_public() for wl in items]
+
+
+@api_mod.route("/wishlist/add", methods=["POST"])
+@require_login
+@require_json()
+def wishlist_add():
+    """
+    Add an item to wishlist.
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :jsonparam int iid: Item ID.
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound` Item not found.
+    :status 405: :py:exc:`.BadJSONData`
+    :status 409: :py:exc:`.ResourceUniqueError`
+    """
+    req = request.get_json()
+    iid = req.get('iid')
+
+    if iid is None:
+        raise BadJSONData
+
+    with db_scoped_session() as ses:
+        item = ses.query(Item).get(iid)
+        if item is None:
+            raise ResourceIDNotFound("Item ID not found.")
+
+        user = ses.query(User).get(session['user']['uid'])
+        already_exists = ses.query(WishList)\
+            .filter_by(uid=user.uid, iid=item.iid)\
+            .first()
+        if already_exists:
+            raise ResourceUniqueError
+        wishlist_item = WishList()
+        wishlist_item.item = item
+        user.wishlist.append(wishlist_item)
+        ses.commit()
+    return success_response
+
+
+@api_mod.route("/wishlist/delete/<int:iid>")
+@require_login
+@require_json(request=False)
+def wishlist_delete(iid):
+    """
+    Delete an item from the wishlist.
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :param int iid: Item ID.
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
+    with db_scoped_session() as ses:
+        uid = session['user']['uid']
+        wishlist_item = ses.query(WishList).filter_by(iid=iid, uid=uid).first()
+        if wishlist_item is None:
+            raise ResourceIDNotFound("Item not found in wishlist")
+
+        ses.delete(wishlist_item)
+        ses.commit()
+    return success_response
+
+
+@api_mod.route("/wishlist/clear")
+@require_login
+@require_json(request=False)
+def wishlist_clear():
+    """
+    Delete all entries in wishlists.
+
+    *** Request ***
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
+    with db_scoped_session() as ses:
+        user = ses.query(User).get(session['user']['uid'])
+        try:
+            for wl in user.wishlist:
+                ses.delete(wl)
+            ses.commit()
+        except Exception as e:
+            ses.rollback()
+            raise e
+        # TODO: Add databse exception
+        return success_response
+
+
+@api_mod.route("/package/install", methods=["POST"])
+@require_json()
+def package_install():
+    """
+    Calculates dependencies of a package and returns a list of packages need to
+    be installed.
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :jsonparam array pkg_names: A list of names of the packages to be installed
+    :jsonparam array installed_pkgs: A list of packages that already installed\
+        on the client.
+    :jsonparam str installed_pkgs[x].pkg_name: The name of an installed package
+    :jsonparam str installed_pkgs[x].pkg_ver: The version of an installed package
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam array pkg_list: The calculated list of packages to be installed
+
+    :status 200: no error: :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.BadJSONData`
+    """
+    with db_scoped_session() as ses:
+        req = request.json
+        if req.get("pkg_names") is None:
+            raise BadJSONData("`pkg_names` field not found.")
+        if type(req["pkg_names"]) is not list:
+            raise BadJSONData("`pkg_names` must be a list of package names.")
+
+        target_pkgs = {}
+        for pkg_name in req["pkg_names"]:
+            pkg = ses.query(Item).filter_by(pkg_name=pkg_name).first()
+            if pkg is None:
+                raise ResourceIDNotFound()
+            target_pkgs[pkg_name] = pkg
+
+        # Build dependency graph
+        class Pkg(objcet):
+            def __init__(self, name, version):
+                self.pkg_name = name
+                self.pkg_version = version
+                self.deps = []
+
+            def compareVersion(self, pkg):
+                pass

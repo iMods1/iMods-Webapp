@@ -8,9 +8,20 @@ DEBUG = True
 ADMINS = [
     {
         'email': 'test@test.com',
-        'password': 'test'
+        'password': 'test',
+        'author_id': 'imods.test'
     }
 ]
+
+DEFAULT_CATEGORIES = [
+    {
+        'name': 'featured',
+        'description': 'featured apps',
+    },
+]
+
+UPLOAD_PATH = "/tmp/imods"
+
 SECRET_KEY = 'somescretkey'  # Replace this in production
 
 SQLITE_DB_PATH = os.path.join(basedir, 'imods.db')
@@ -20,3 +31,5 @@ DATABASE_CONNECT_OPTIONS = {}
 
 CSRF_ENABLED = True
 CSRF_SESSION_KEY = "somethingimpossibletoguess"
+
+BOTO_PROFILE = 'imods_testing'

@@ -11,7 +11,7 @@
         </p>
         {% else %}
         <form method="POST" action="">
-            {{ form.hidden_tag() if form.hidden_tag }}
+            <!--<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>-->
             {% for f in form if f.type != 'CSRFTokenField' %}
             <div>
             {{ f.label }}

@@ -34,9 +34,21 @@ def init_db():
 def drop_db(db):
     db.drop_all()
 
+
+def init_folders():
+    # Create upload folder if not exits
+    if not os.path.exists(app.config["UPLOAD_PATH"]):
+        try:
+            os.makedirs(app.config["UPLOAD_PATH"])
+        except:
+            app.logger.warning("Failed to create upload folder %s,\
+                               file uploading will not work.")
+
+
 from imods.api.routes import api_mod
 from imods.admin.views import imods_admin
 app.register_blueprint(api_mod)
 imods_admin.init_app(app)
 
 init_db()
+init_folders()

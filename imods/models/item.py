@@ -1,6 +1,7 @@
 from imods import db
 from imods.models.mixin import JSONSerialize
 from datetime import datetime
+from imods.models.review import Review
 # Removing 'import category' will cause table not found error
 import category
 # Remove PEP8 'not used' error
@@ -13,7 +14,8 @@ class Item(db.Model, JSONSerialize):
                   "display_name", "pkg_version", "pkg_assets_path",
                   "pkg_dependencies", "price", "summary", "description",
                   "add_date", "last_update_date")
-    iid = db.Column(db.Integer, primary_key=True)
+    iid = db.Column(db.Integer, primary_key=True, nullable=False,
+                    autoincrement=True)
     # ON DELETE CASCADE prevents the category from being deleted if it has at
     # least one item associated with it.
     category_id = db.Column(db.Integer,
@@ -35,11 +37,16 @@ class Item(db.Model, JSONSerialize):
     price = db.Column(db.Float())
     summary = db.Column(db.String(500))
     description = db.Column(db.String())
+    # The content of the control file of a debian package
+    control = db.Column(db.String())
     # Here we handle datetime at ORM level, because some databases don't handle
     # it well, and often cause problems.
     add_date = db.Column(db.Date(), default=datetime.utcnow, nullable=False)
     last_update_date = db.Column(db.Date(), default=datetime.utcnow,
                                  onupdate=datetime.utcnow, nullable=False)
+
+    reviews = db.relationship(Review, back_populates="item",
+                              cascade="all, delete-orphan")
 
     def dependencies(self):
         return "<Dependencies: %r>" % (self.pkg_dependencies)

@@ -10,6 +10,7 @@ class BillingType:
 class UserRole:
     SiteAdmin = 0
     Admin = 1
+    AppDev = 50
     User = 100
 
 

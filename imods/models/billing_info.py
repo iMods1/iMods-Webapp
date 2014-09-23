@@ -5,13 +5,14 @@ from imods.models.mixin import JSONSerialize
 
 class BillingInfo(db.Model, JSONSerialize):
     __tablename__ = "BILLING_INFO"
-    __public__ = ("bid", "uid", "address", "zipcode", "state", "country",
-                  "type_")
+    __public__ = ("bid", "uid", "address", "zipcode", "city", "state",
+                  "country", "type_")
 
     bid = db.Column(db.Integer, primary_key=True, nullable=False)
     uid = db.Column(db.Integer, db.ForeignKey('USER.uid'))
     address = db.Column(db.String(200), nullable=False)
     zipcode = db.Column(db.Integer, nullable=False)
+    city = db.Column(db.String(100), nullable=False)
     state = db.Column(db.String(100), nullable=False)
     country = db.Column(db.String(100), nullable=False)
     type_ = db.Column(db.String(200), default=BillingType.creditcard,
