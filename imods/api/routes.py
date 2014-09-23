@@ -16,7 +16,6 @@ from datetime import datetime
 import os
 import operator
 import base64
-import apt
 
 
 api_mod = Blueprint("api_mods", __name__, url_prefix="/api")
@@ -1482,4 +1481,4 @@ def package_install():
                 self.deps = []
 
             def compareVersion(self, pkg):
-                return apt.VersionCompare(self.pkg_version, pkg.pkg_version)
+                pass

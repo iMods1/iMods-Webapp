@@ -37,6 +37,8 @@ class Item(db.Model, JSONSerialize):
     price = db.Column(db.Float())
     summary = db.Column(db.String(500))
     description = db.Column(db.String())
+    # The content of the control file of a debian package
+    control = db.Column(db.String())
     # Here we handle datetime at ORM level, because some databases don't handle
     # it well, and often cause problems.
     add_date = db.Column(db.Date(), default=datetime.utcnow, nullable=False)
