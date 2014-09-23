@@ -8,7 +8,8 @@ DEBUG = False
 ADMINS = [
     {
         'email': 'imods@imods.com',
-        'password': 'iModsAdmin123'
+        'password': 'iModsAdmin123',
+        'author_id': 'imodsadmin'
     }
 ]
 
