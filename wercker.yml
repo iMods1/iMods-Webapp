@@ -1,4 +1,6 @@
 box: wercker/python
+services:
+    - ofan/libapt-pkg-box@0.1.0
 build:
     steps:
         - virtualenv:
