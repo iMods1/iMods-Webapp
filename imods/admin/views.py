@@ -216,6 +216,9 @@ class PackageAssetsUploadForm(ExtForm):
     def validate_screenshot(self, field):
         return self.validate_imgfile(field)
 
+    def is_accessible(self):
+        return session.get('user') is not None
+
 
 class PackageAssetsView(BaseView):
     template_name = u"package_assets.html"
