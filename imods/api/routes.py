@@ -354,6 +354,7 @@ def category_list(cid, name):
     :jsonparam int parent_id: parent category id
     :jsonparam string name: name of the category
     :jsonparam string description: description of the category
+    :jsonparam array items: list of items included in the category
 
     _NOTE: /category/name/<name> returns a list(array) of categories_
 
