@@ -159,9 +159,8 @@ class iModsAdminIndexView(AdminIndexView):
         if not session.get('user'):
             return redirect(url_for('.login_view'))
         elif session['user']['role'] != UserRole.SiteAdmin:
-            raise wtf.validators.ValidationError(
-                "You don't have required permission to access this page.")
-        return super(iModsAdminIndexView, self).index()
+            del session['user']
+        return redirect(url_for(".index"))
 
     @expose('/login', methods=["GET", "POST"])
     def login_view(self):
