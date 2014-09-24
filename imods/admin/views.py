@@ -160,7 +160,7 @@ class iModsAdminIndexView(AdminIndexView):
             return redirect(url_for('.login_view'))
         elif session['user']['role'] != UserRole.SiteAdmin:
             del session['user']
-        return redirect(url_for(".index"))
+        return redirect(url_for(".login_view"))
 
     @expose('/login', methods=["GET", "POST"])
     def login_view(self):
