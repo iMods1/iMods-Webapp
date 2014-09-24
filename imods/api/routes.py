@@ -706,11 +706,14 @@ def billing_delete(bid):
     return success_response
 
 
-@api_mod.route("/item/list", defaults={"iid": None})
-@api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None})
-@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None})
+@api_mod.route("/item/list", defaults={"iid": None, 
+                "pkg_name": None, "cat_name": None})
+@api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None,
+                                "cat_name": None})
+@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None, "cat_name": None})
+@api_mod.route("/item/cat/<cat_name>", defaults={"iid": None, "pkg_name": None})
 @require_json(request=False)
-def item_list(iid, pkg_name):
+def item_list(iid, pkg_name, cat_name):
     """
     Get information of an item.
 
@@ -749,6 +752,12 @@ def item_list(iid, pkg_name):
         if not item:
             raise ResourceIDNotFound
         return item.get_public()
+    elif cat_name is not None:
+        category = Category.query.filter_by(name=cat_name).first()
+        if not category:
+            raise ResourceIDNotFound
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, category.items.all())
     else:
         limit = request.args.get("limit") or DEFAULT_LIMIT
         if limit > MAX_LIMIT:
