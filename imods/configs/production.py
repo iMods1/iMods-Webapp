@@ -3,7 +3,7 @@ import os
 # Abs path of current file
 basedir = os.environ.get('IMODS_DB_DIR') or '/var/db/imods.wunderkind.us'
 
-DEBUG = False
+DEBUG = True
 
 ADMINS = [
     {
