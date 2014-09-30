@@ -5,7 +5,7 @@ from imods.models.mixin import JSONSerialize
 class Category(db.Model, JSONSerialize):
     __tablename__ = "CATEGORY"
     __table_args = {"extend_existing": True}
-    __public__ = ("cid", "parent_id", "name", "description")
+    __public__ = ("cid", "parent_id", "name", "description", "items")
 
     reservedNames = ["featured"]
 
