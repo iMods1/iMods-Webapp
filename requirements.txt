@@ -16,8 +16,10 @@ docutils==0.12
 itsdangerous==0.24
 pydot==1.0.2
 pyparsing==2.0.2
+requests==0.13.2
 six==1.7.3
 sphinxcontrib-httpdomain==1.2.1
 sqlalchemy-schemadisplay==1.2
+stripe==1.19.0
 uWSGI==2.0.6
 wsgiref==0.1.2
