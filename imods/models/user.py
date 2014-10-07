@@ -44,6 +44,7 @@ class User(db.Model, JSONSerialize):
                             passive_deletes="all")
 
     orders = db.relationship(Order,
+                             lazy="dynamic",
                              backref="user",
                              cascade="all,delete-orphan")
 
