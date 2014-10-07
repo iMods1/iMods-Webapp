@@ -1030,6 +1030,45 @@ def order_list(oid):
         get_public = operator.methodcaller('get_public')
         return map(get_public, orders)
 
+@api_mod.route("/order/user_item_purchases/<int:iid>")
+@require_login
+@require_json(request=False)
+def order_user_item_purchases(iid):
+    """
+    Get information of all a user's orders by item id
+
+    *** Request ***
+
+    :param int iid: item id
+
+    *** Response ***
+
+    :jsonparam int oid: order id
+    :jsonparam int uid: user id
+    :jsonparam string pkg_name: package name
+    :jsonparam int quantity: quantity
+    :jsonparam string currency: currency
+    :jsonparam int status: order status, :py:class:`.OrderStatus`
+    :jsonparam int billing_id: billing method id
+    :jsonparam float total_price: total price
+    :jsonparam float total_charged: total charged
+    :jsonparam string order_date: the date of order placed
+    :jsonparam dict billing: billing info
+    :jsonparam dict item: item info
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
+
+    uid = session['user']['uid']
+    user = User.query.get(uid)
+    orders = user.orders.filter_by(status=OrderStatus.OrderCompleted) \
+            .filter(Order.item.has(iid=iid)).all()
+    get_public = operator.methodcaller('get_public')
+    return map(get_public, orders)
 
 @api_mod.route("/order/update/<int:oid>", methods=["POST"])
 @require_login
