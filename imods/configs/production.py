@@ -34,3 +34,5 @@ CSRF_SESSION_KEY =\
     'h\xb8b,b\xb6g]L\x04\x06\xa7\xb1\xf7C`\xda\xa4\xfbQ~\xf9\x02\xc9'
 
 BOTO_PROFILE = 'imods_production'
+
+STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY')

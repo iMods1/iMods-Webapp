@@ -1070,6 +1070,90 @@ def order_user_item_purchases(iid):
     get_public = operator.methodcaller('get_public')
     return map(get_public, orders)
 
+@api_mod.route("/order/stripe_purchase/<int:oid>", methods=["POST"])
+@require_login
+@require_json()
+def order_stripe_purchase(oid):
+    """
+    Creates a new Stripe charge for the amount for the specified order
+
+    *** Request ***
+
+    :param int oid: order id
+    :jsonparam string token: Stripe card token to charge
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 402: :py:exc:`.RequestFailed`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
+    from imods import app
+    import stripe
+
+    uid = session['user']['uid']
+    order = Order.query.get(oid)
+    req = request.get_json()
+    if not order:
+        raise ResourceIDNotFound()
+    if order.uid != uid:
+        raise InsufficientPrivileges()
+    stripe.api_key = app.config.get('STRIPE_API_KEY')
+
+    total = int(order.total_price * 100) # Price in cents
+
+    try:
+        stripe.Charge.create(
+            amount=total,
+            currency=order.currency,
+            card=req.get('token'),
+            description="Charge for user: {0}, package: {1}, price: {2}".format(order.user.fullname, order.pkg_name, total)
+        )
+
+        print "Stripe charge successfully created"
+
+        with db_scoped_session() as se:
+            se.query(Order).filter_by(oid=oid).update(
+                {'status': OrderStatus.OrderCompleted}
+            )
+            se.commit()
+        print "Order successfully updated"
+
+    except stripe.error.CardError, e:
+      # Since it's a decline, stripe.error.CardError will be caught
+      body = e.json_body
+      err  = body['error']
+
+      print "Status is: %s" % e.http_status
+      print "Type is: %s" % err['type']
+      print "Code is: %s" % err['code']
+      # param is '' in this case
+      print "Param is: %s" % err['param']
+      print "Message is: %s" % err['message']
+    except stripe.error.InvalidRequestError, e:
+      # Invalid parameters were supplied to Stripe's API
+      pass
+    except stripe.error.AuthenticationError, e:
+      # Authentication with Stripe's API failed
+      # (maybe you changed API keys recently)
+      pass
+    except stripe.error.APIConnectionError, e:
+      # Network communication with Stripe failed
+      pass
+    except stripe.error.StripeError, e:
+      # Display a very generic error to the user, and maybe send
+      # yourself an email
+      pass
+    except Exception, e:
+      # Something else happened, completely unrelated to Stripe
+      pass
+
+    return success_response
+
 @api_mod.route("/order/update/<int:oid>", methods=["POST"])
 @require_login
 @require_json()
