@@ -1106,24 +1106,22 @@ def order_stripe_purchase(oid):
 
     total = int(order.total_price * 100) # Price in cents
 
-    try:
-        stripe.Charge.create(
-            amount=total,
-            currency=order.currency,
-            card=req.get('token'),
-            description="Charge for user: {0}, package: {1}, price: {2}".format(
-                order.user.fullname, 
-                order.pkg_name, total)
+    stripe.Charge.create( amount=total,
+        currency=order.currency,
+        card=req.get('token'),
+        description="Charge for user: {0}, package: {1}, price: {2}".format(
+            order.user.fullname, 
+            order.pkg_name, total)
+    )
+
+    print "Stripe charge successfully created"
+
+    with db_scoped_session() as se:
+        se.query(Order).filter_by(oid=oid).update(
+            {'status': OrderStatus.OrderCompleted}
         )
-
-        print "Stripe charge successfully created"
-
-        with db_scoped_session() as se:
-            se.query(Order).filter_by(oid=oid).update(
-                {'status': OrderStatus.OrderCompleted}
-            )
-            se.commit()
-        print "Order successfully updated"
+        se.commit()
+    print "Order successfully updated"
 
     return success_response
 
