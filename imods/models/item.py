@@ -16,10 +16,6 @@ class Item(db.Model, JSONSerialize):
                   "add_date", "last_update_date")
     iid = db.Column(db.Integer, primary_key=True, nullable=False,
                     autoincrement=True)
-    # ON DELETE CASCADE prevents the category from being deleted if it has at
-    # least one item associated with it.
-    category_id = db.Column(db.Integer,
-                            db.ForeignKey("CATEGORY.cid", ondelete="CASCADE"))
     # author_id can be NULL because an item may be from a foreign source,
     # e.g. libc is standard c library and the author may not be present in
     # the database, so the author_id should be NULL

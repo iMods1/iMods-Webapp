@@ -514,8 +514,7 @@ def category_delete(cid):
     with db_scoped_session() as se:
         category = se.query(Category).get(cid)
         children = se.query(Category).filter_by(parent_id=cid).first()
-        items = se.query(Item).filter_by(category_id=cid).first()
-        if children or items:
+        if children:
             raise CategoryNotEmpty()
         se.delete(category)
         se.commit()
@@ -781,7 +780,6 @@ def item_add():
 
     *** Request ***
 
-    :jsonparam int category_id: category id
     :jsonparam string pkg_name: package name
     :jsonparam string display_name: display name of the package
     :jsonparam string pkg_version: package version
@@ -802,8 +800,7 @@ def item_add():
     if type(req) is not dict:
         req = dict(json.loads(req))
     author_id = req.get("author_id") or session['user']['author_identifier']
-    item = Item(category_id=req.get('category_id'),
-                pkg_name=req['pkg_name'],
+    item = Item(pkg_name=req['pkg_name'],
                 pkg_version=req['pkg_version'],
                 display_name=req['display_name'],
                 author_id=author_id,
