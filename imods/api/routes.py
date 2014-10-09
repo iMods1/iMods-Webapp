@@ -514,7 +514,7 @@ def category_delete(cid):
     with db_scoped_session() as se:
         category = se.query(Category).get(cid)
         children = se.query(Category).filter_by(parent_id=cid).first()
-        if children or category.items:
+        if children:
             raise CategoryNotEmpty()
         se.delete(category)
         se.commit()
