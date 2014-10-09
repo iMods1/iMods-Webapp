@@ -2,6 +2,11 @@ from imods import db
 from imods.models.mixin import JSONSerialize
 
 
+association_table = db.Table('ITEM_CATEGORY_ASSOC',
+    db.Column('category_id', db.Integer, db.ForeignKey('CATEGORY.cid')),
+    db.Column('item_id', db.Integer, db.ForeignKey('ITEM.iid'))
+)
+
 class Category(db.Model, JSONSerialize):
     __tablename__ = "CATEGORY"
     __table_args = {"extend_existing": True}
@@ -18,7 +23,8 @@ class Category(db.Model, JSONSerialize):
                                backref=db.backref("parent", remote_side=[cid]),
                                )
 
-    items = db.relationship("Item", backref="category", lazy="dynamic")
+    items = db.relationship("Item", secondary=association_table,
+            backref=db.backref('categories', lazy='dynamic'), lazy='dynamic')
 
     def __repr__(self):
         return "<Category '%r'>" % (self.name)
