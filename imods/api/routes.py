@@ -1093,15 +1093,7 @@ def order_stripe_purchase(oid):
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
     from imods import app
-    from logging.handlers import FileHandler
-    import logging
     import stripe
-    import traceback
-    
-    # Set up logging
-    handler = FileHandler("imods_warnings.log")
-    handler.setLevel(logging.WARNING)
-    app.logger.addHandler(handler)
 
     uid = session['user']['uid']
     order = Order.query.get(oid)
@@ -1122,12 +1114,19 @@ def order_stripe_purchase(oid):
             description="Charge for user: {0}, package: {1}, price: {2}".format(order.user.fullname, order.pkg_name, total)
         )
 
+        print "Stripe charge successfully created"
+
+        with db_scoped_session() as se:
+            se.query(Order).filter_by(oid=oid).update(
+                {'status': OrderStatus.OrderCompleted}
+            )
+            se.commit()
+        print "Order successfully updated"
+
     except stripe.error.CardError, e:
       # Since it's a decline, stripe.error.CardError will be caught
       body = e.json_body
       err  = body['error']
-
-      app.logger.error(err)
 
       print "Status is: %s" % e.http_status
       print "Type is: %s" % err['type']
@@ -1137,28 +1136,21 @@ def order_stripe_purchase(oid):
       print "Message is: %s" % err['message']
     except stripe.error.InvalidRequestError, e:
       # Invalid parameters were supplied to Stripe's API
-      app.logger.error(traceback.format_exc())
-
+      pass
     except stripe.error.AuthenticationError, e:
       # Authentication with Stripe's API failed
       # (maybe you changed API keys recently)
-      app.logger.error(traceback.format_exc())
+      pass
     except stripe.error.APIConnectionError, e:
       # Network communication with Stripe failed
-      app.logger.error(traceback.format_exc())
+      pass
     except stripe.error.StripeError, e:
       # Display a very generic error to the user, and maybe send
       # yourself an email
-      app.logger.error(traceback.format_exc())
+      pass
     except Exception, e:
       # Something else happened, completely unrelated to Stripe
-      app.logger.error(traceback.format_exc())
-    else:
-        with db_scoped_session() as se:
-            se.query(Order).filter_by(oid=oid).update(
-                {'status': OrderStatus.OrderCompleted}
-            )
-            se.commit()
+      pass
 
     return success_response
 
