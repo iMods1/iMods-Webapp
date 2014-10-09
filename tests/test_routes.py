@@ -221,54 +221,6 @@ class TestRoutes(unittest.TestCase):
             assert rv5.status_code == ResourceIDNotFound.status_code
             assert "not found" in rv5.data
 
-    def test_featured(self):
-        with self.app.test_client() as server:
-            self.user_register(server, "category_admin",
-                               "category@category.com", "category123", 99)
-            self.user_login(server, "category@category.com", "category123")
-            # Need app dev role to add an item
-            with server.session_transaction() as se:
-                se['user']['role'] = UserRole.SiteAdmin
-
-            data1 = dict(
-                name="Featured",
-                description="description1"
-            )
-            with self.post_json(server, "/api/category/add", data1) as rv:
-                assert rv.status_code == 409
-                js = json.loads(rv.data)
-
-            cat_featured_id = None
-            with server.get("/api/category/featured") as rv:
-                assert rv.status_code == 200
-                js = json.loads(rv.data)
-                cat_featured_id = js['cid']
-
-            with server.session_transaction() as se:
-                se['user']['role'] = UserRole.AppDev
-
-            data_item = dict(
-                category_id=cat_featured_id,
-                pkg_name="package1",
-                pkg_version="version1",
-                display_name="Fine Package1",
-                price=0.99,
-                summary="summary1",
-                description="description1",
-                pkg_dependencies="dep1, dep2>0.5"
-            )
-            with self.post_json(server, "/api/item/add", data_item) as rv:
-                assert rv.status_code == 200
-
-            with server.get("/api/item/featured") as rv:
-                assert rv.status_code == 200
-                js = json.loads(rv.data)
-                assert len(js) == 1
-                item = js[0]
-                assert item['pkg_name'] == data_item['pkg_name']
-                assert item['pkg_version'] == data_item['pkg_version']
-                assert item['display_name'] == data_item['display_name']
-
     def test_billing(self):
         with self.app.test_client() as server:
             rv = self.user_register(server, "billing", "billing@billing.com",
