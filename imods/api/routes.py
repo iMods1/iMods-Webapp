@@ -548,6 +548,8 @@ def billing_list(bid):
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
+    uid = session['user']['uid']
+    user = User.query.get(uid)
     if bid is not None:
         billing = BillingInfo.query.get(bid)
         if not billing:
@@ -558,7 +560,7 @@ def billing_list(bid):
         if limit > MAX_LIMIT:
             limit = MAX_LIMIT
         page = request.args.get("page") or 0
-        billings = BillingInfo.query
+        billings = user.billing_methods
         billings.offset(page*limit)
         billings.limit(limit)
         billings = billings.all()
