@@ -36,6 +36,7 @@ class User(db.Model, JSONSerialize):
                               cascade="all,delete-orphan")
 
     billing_methods = db.relationship(BillingInfo,
+                                      lazy="dynamic",
                                       backref="owner",
                                       cascade="all,delete-orphan")
 
