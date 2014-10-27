@@ -265,6 +265,8 @@ class PackageAssetsView(BaseView):
                         pkg_path,
                         pkg_fullname,
                         package_file.filename)
+                    item.pkg_path = pkg_s3_key_path
+
 
                     # Save deb file to the cache folder
                     pkg_local_cache_path = path.join(

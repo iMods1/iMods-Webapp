@@ -73,7 +73,7 @@ deploy:
 
         - script:
             name: stopping application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'supervisorctl stop imods:imods_server_production'
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'supervisorctl stop imods:*'
 
         - script:
             name: cleanning remote environment

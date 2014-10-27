@@ -42,3 +42,5 @@ S3_PKG_BUCKET = 'imods_package'
 
 PKG_INDEX_FILE_NAME = "Packages.gz"
 
+# Download links expires in 30 minutes
+DOWNLOAD_URL_EXPIRES_IN = 30*60
