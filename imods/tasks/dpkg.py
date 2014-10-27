@@ -9,9 +9,9 @@ import boto
 from tempfile import mkstemp
 
 
-def dpkg_scan(repo_path, extra_overrides_file):
+def dpkg_scan(repo_path, index_file, extra_overrides_file):
     try:
-        package_gz = gzip.open(os.path.join(repo_path, "Packages.gz"), "wb")
+        package_gz = gzip.open(index_file, "wb")
         if extra_overrides_file:
             options = ['-e', extra_overrides_file]
         else:
@@ -47,7 +47,7 @@ def upload_to_s3(bucket_name, key_path, local_file, clean=False):
 
 
 @celery.task()
-def dpkg_update_index(local_repo_path, bucket_name, index_key_path,
+def dpkg_update_index(local_repo_path, bucket_name, index_key_path, index_file,
                       overrides=None):
     tmpfile = None
     if overrides:
@@ -62,5 +62,5 @@ def dpkg_update_index(local_repo_path, bucket_name, index_key_path,
         logging.error("dpkg-scanpackages just failed, stop updating index")
         return False
 
-    upload_to_s3.delay(bucket_name, index_key_path, tmpfile, False)
+    upload_to_s3.delay(bucket_name, index_key_path, index_file, False)
     os.unlink(tmpfile)

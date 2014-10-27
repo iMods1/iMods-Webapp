@@ -294,11 +294,14 @@ class PackageAssetsView(BaseView):
                     upload_to_s3.delay(pkg_bucket,
                                        pkg_s3_key_path,
                                        pkg_local_cache_path)
-
+                    pkg_index_file = path.join(app.config["UPLOAD_PATH"],
+                                               app.config["PKG_INDEX_FILE_NAME"]
+                                               )
                     # Update and upload package index
                     dpkg_update_index.delay(app.config["UPLOAD_PATH"],
                                             pkg_bucket,
                                             index_s3_key_path,
+                                            pkg_index_file,
                                             pkg_overrides)
 
                     # Upload icon
