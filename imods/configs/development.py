@@ -20,7 +20,9 @@ DEFAULT_CATEGORIES = [
     },
 ]
 
-UPLOAD_PATH = "/tmp/imods"
+UPLOAD_PATH = os.path.join(basedir, "deb")
+
+CELERY_BROKER_URL = "amqp://imods:imodsmq@localhost/imods"
 
 SECRET_KEY = 'somescretkey'  # Replace this in production
 
@@ -33,5 +35,10 @@ CSRF_ENABLED = True
 CSRF_SESSION_KEY = "somethingimpossibletoguess"
 
 BOTO_PROFILE = 'imods_testing'
+
+S3_ASSETS_BUCKET = 'imods'
+S3_PKG_BUCKET = 'imods_package'
+
+PKG_INDEX_FILE_NAME = "Packages.gz"
 
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY')
