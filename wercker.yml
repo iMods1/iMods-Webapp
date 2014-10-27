@@ -89,7 +89,7 @@ deploy:
 
         - script:
             name: starting application
-            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "supervisorctl start imods:imods_server_production"
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "supervisorctl start imods:*"
 
         - script:
             name: clean builds
