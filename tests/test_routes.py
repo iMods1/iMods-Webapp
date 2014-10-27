@@ -237,7 +237,7 @@ class TestRoutes(unittest.TestCase):
                 state="state1",
                 country="country1",
                 type_="creditcard",
-                cc_no="2312321312312312",
+                cc_no="4242424242424242",
                 cc_name="billing name1",
                 cc_cvv=123,
                 cc_expr="12/15"
@@ -390,7 +390,7 @@ class TestRoutes(unittest.TestCase):
                 city="city1",
                 country="country1",
                 type_="creditcard",
-                cc_no="2312321312312312",
+                cc_no="4242424242424242",
                 cc_name="billing name1",
                 cc_expr="12/15"
             )
@@ -426,14 +426,10 @@ class TestRoutes(unittest.TestCase):
             assert js2["quantity"] == 1
             assert js2["currency"] == "USD"
 
-            rv3 = server.get("/api/order/cancel/%d" % js1["oid"])
-            assert rv3.status_code == 200
-            assert 'successful' in rv3.data
-
             rv4 = server.get("/api/order/id/%d" % js1["oid"])
             js4 = json.loads(rv4.data)
             assert rv4.status_code == 200
-            assert js4["status"] == OrderStatus.OrderCancelled
+            assert js4["status"] == OrderStatus.OrderCompleted
 
     def test_review(self):
         with self.app.test_client() as server:
