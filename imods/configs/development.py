@@ -34,4 +34,4 @@ CSRF_SESSION_KEY = "somethingimpossibletoguess"
 
 BOTO_PROFILE = 'imods_testing'
 
-STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY')
+STRIPE_API_KEY = "sk_test_THSmIZgT2oLYqX56g3VeGOBd"

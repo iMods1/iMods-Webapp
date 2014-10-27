@@ -622,9 +622,9 @@ def billing_add():
                           cc_name=req.get('cc_name'),
                           cc_expr=cc_expr)
     with db_scoped_session() as se:
-        billing.get_or_create_stripe_card_obj(cc_cvv)
         se.add(billing)
         se.commit()
+        billing.get_or_create_stripe_card_obj(cc_cvv)
         return billing.get_public()
 
 

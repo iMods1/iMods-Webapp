@@ -67,7 +67,6 @@ class User(db.Model, JSONSerialize):
         try:
             return stripe.Customer.retrieve(self.stripe_customer_token)
         except Exception as e:
-            print e
             # Stripe customer not found, create new customer
             stripe_customer_token = stripe.Customer.create(
                     description=self.fullname,
