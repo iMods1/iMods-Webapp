@@ -1717,7 +1717,9 @@ def package_get():
     if res_type is None or (pkg_names is None and item_ids is None):
         raise BadJSONData
 
-    if type(item_ids) is not list or type(pkg_names) is not list:
+    if item_ids and type(item_ids) is not list:
+        raise BadJSONData
+    if pkg_names and type(pkg_names) is not list:
         raise BadJSONData
 
     if res_type not in ("assets", "deb", "all"):
@@ -1727,21 +1729,21 @@ def package_get():
         items = []
         if item_ids:
             for iid in item_ids:
-                item = ses.query(Item).get(iid=iid)
+                item = ses.query(Item).get(iid)
                 if not item:
-                    raise ResourceIDNotFound("Item_id %d is not found" % iid)
+                    raise ResourceIDNotFound("Item_id '%d' is not found" % iid)
                 items.append(item)
         elif pkg_names:
             for name in pkg_names:
-                item = ses.query(Item).get(pkg_name=name)
+                item = ses.query(Item).filter_by(pkg_name=name).first()
                 if not item:
-                    raise ResourceIDNotFound("Package name %s is not found" % name)
+                    raise ResourceIDNotFound("Package name '%s' is not found" % name)
                 items.append(item)
         else:
             raise InternalException("This shouldn't happend")
 
         uid = session['user']['uid']
-        user = ses.query(User).get(uid=uid)
+        user = ses.query(User).get(uid)
         if not user:
             raise InternalException(
                 "User id %d is not found, but user is already logged in, probably a bug!" % uid)
@@ -1749,7 +1751,7 @@ def package_get():
         # Build order history
         # TODO: Use cache to speed up
         orders = {}
-        for od in user.orders.get():
+        for od in user.orders.all():
             orders[od.pkg_name] = True
 
         result = []
@@ -1772,7 +1774,7 @@ def package_get():
             screenshots = []
             res_item = {
                 'pkg_name': item.pkg_name,
-                'pkg_ver': item.pkg_ver,
+                'pkg_ver': item.pkg_version,
                 'deb_url': [],
                 'url_expires_in': expire,
                 'assets': {
@@ -1787,7 +1789,7 @@ def package_get():
                     if icon.name.endswith('/'):
                         # Skip subfolders
                         continue
-                    icon_url = icon.generate_url(force_http=True, query_auth=False)
+                    icon_url = icon.generate_url(expire)
                     icon_name = os.path.basename(icon.name)
                     icons.append(dict(name=icon_name, url=icon_url))
 
@@ -1797,7 +1799,7 @@ def package_get():
                 for sshot in ss_list:
                     if sshot.name.endswith('/'):
                         continue
-                    sshot_url = sshot.generate_url(force_http=True, query_auth=False)
+                    sshot_url = sshot.generate_url(expire)
                     sshot_name = os.path.basename(sshot.name)
                     screenshots.append(dict(name=sshot_name, url=sshot_url))
 
@@ -1806,12 +1808,12 @@ def package_get():
             res_item['assets'] = assets
 
             pkg_bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
-            deb_key = pkg_bucket.get(item.pkg_path)
+            deb_key = pkg_bucket.get_key(item.pkg_path)
             if res_type in ("deb", "all"):
                 # Verify the item is available to the user
-                #if orders.get(item.pkg_name) is None:
-                    #raise InsufficientPrivileges(
-                        #"Item %s(%d) is not purchased." % (item.pkg_name, item.iid))
+                if orders.get(item.pkg_name) is None:
+                    raise InsufficientPrivileges(
+                        "Item %s(%d) is not purchased." % (item.pkg_name, item.iid))
                 deb_url = deb_key.generate_url(expires_in=expire)
                 res_item['deb_url'] = deb_url
 
