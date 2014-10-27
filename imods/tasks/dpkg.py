@@ -61,6 +61,6 @@ def dpkg_update_index(local_repo_path, bucket_name, index_key_path,
         os.unlink(tmpfile)
         logging.error("dpkg-scanpackages just failed, stop updating index")
         return False
-    os.unlink(tmpfile)
 
     upload_to_s3.delay(bucket_name, index_key_path, tmpfile, False)
+    os.unlink(tmpfile)
