@@ -57,7 +57,7 @@ def dpkg_update_index(local_repo_path, bucket_name, index_key_path, index_file,
                 tmp.write("%s %s %s\n" % (str(entry[0]),
                                           str(entry[1]),
                                           str(entry[2])))
-    if not dpkg_scan(local_repo_path, tmpfile):
+    if not dpkg_scan(local_repo_path, index_file, tmpfile):
         os.unlink(tmpfile)
         logging.error("dpkg-scanpackages just failed, stop updating index")
         return False
