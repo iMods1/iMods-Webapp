@@ -1,4 +1,7 @@
 from imods import db
+from imods import app
+from imods.helpers import db_scoped_session
+import stripe
 from constants import BillingType
 from imods.models.mixin import JSONSerialize
 
@@ -20,6 +23,7 @@ class BillingInfo(db.Model, JSONSerialize):
     cc_no = db.Column(db.String(100))
     cc_expr = db.Column(db.Date)
     cc_name = db.Column(db.String(200))
+    stripe_card_token = db.Column(db.String(100), nullable=True)
 
     def __repr__(self):
         # Don't print out any information other than billing type
@@ -29,3 +33,25 @@ class BillingInfo(db.Model, JSONSerialize):
         result = super(BillingInfo, self).get_public(*args, **kwargs)
         result['cc_no'] = self.cc_no[-4:]
         return result
+
+    def get_or_create_stripe_card_obj(self, cvc=None):
+        from imods.models import User
+        stripe.api_key = app.config.get("STRIPE_API_KEY")
+        user = User.query.get(self.uid)
+        customer = user.get_or_create_stripe_customer_obj()
+        try:
+            return customer.cards.retrieve(self.stripe_card_token)
+        except:
+            stripe_card_token = customer.cards.create(
+                card={
+                        "number": self.cc_no,
+                        "exp_month": self.cc_expr.month,
+                        "exp_year": self.cc_expr.year,
+                        "cvc": cvc
+                    }
+                )
+            with db_scoped_session() as se:
+                se.query(BillingInfo).filter_by(bid=self.bid).update({"stripe_card_token": stripe_card_token.id})
+                se.commit()
+
+            return stripe_card_token
