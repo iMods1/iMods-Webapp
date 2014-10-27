@@ -25,7 +25,7 @@ class BillingInfo(db.Model, JSONSerialize):
         # Don't print out any information other than billing type
         return "<Billing Type:%r>" % (self.type_)
 
-    def get_public(self):
-        result = super(BillingInfo, self).get_public()
+    def get_public(self, *args, **kwargs):
+        result = super(BillingInfo, self).get_public(*args, **kwargs)
         result['cc_no'] = self.cc_no[-4:]
         return result
