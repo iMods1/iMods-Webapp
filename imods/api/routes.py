@@ -542,6 +542,8 @@ def billing_list(bid):
     :jsonparam string state: state
     :jsonparam string country: country
     :jsonparam string type_: payment method type, see :py:class:`.BillingType`
+    :jsonparam string cc_no: last 4 digits of credit card number
+    :jsonparam string cc_name: name on credit card
 
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
