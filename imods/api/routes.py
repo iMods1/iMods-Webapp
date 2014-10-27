@@ -1,5 +1,6 @@
-from flask import request, session, Blueprint, json, app
+from flask import request, session, Blueprint, json
 from werkzeug import check_password_hash, generate_password_hash
+from imods import app
 from imods.models.constants import BillingType
 from imods.models import User, Order, Item, Device, Category, BillingInfo
 from imods.models import UserRole, OrderStatus, Review, WishList
@@ -1633,10 +1634,10 @@ def package_index():
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound` Package index doesn't exists.
     """
-    s3 = boto.connect(profile_name=app.config.get("BOTO_PROFILE"))
+    s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
     bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
 
-    pkg_index = bucket.get_key(app.config["pkg_index_file_name"])
+    pkg_index = bucket.get_key(app.config["PKG_INDEX_FILE_NAME"])
     if pkg_index is None:
         raise ResourceIDNotFound("Index file not found.")
 
@@ -1808,9 +1809,9 @@ def package_get():
             deb_key = pkg_bucket.get(item.pkg_path)
             if res_type in ("deb", "all"):
                 # Verify the item is available to the user
-                if orders.get(item.pkg_name) is None:
-                    raise InsufficientPrivileges(
-                        "Item %s(%d) is not purchased." % (item.pkg_name, item.iid))
+                #if orders.get(item.pkg_name) is None:
+                    #raise InsufficientPrivileges(
+                        #"Item %s(%d) is not purchased." % (item.pkg_name, item.iid))
                 deb_url = deb_key.generate_url(expires_in=expire)
                 res_item['deb_url'] = deb_url
 
