@@ -1,5 +1,6 @@
 from flask import request, session, Blueprint, json
 from werkzeug import check_password_hash, generate_password_hash
+from imods.models.constants import BillingType
 from imods.models import User, Order, Item, Device, Category, BillingInfo
 from imods.models import UserRole, OrderStatus, Review, WishList
 from imods.decorators import require_login, require_json
@@ -621,6 +622,7 @@ def billing_add():
                           cc_name=req.get('cc_name'),
                           cc_expr=cc_expr)
     with db_scoped_session() as se:
+        billing.get_or_create_stripe_card_obj(cc_cvv)
         se.add(billing)
         se.commit()
         return billing.get_public()
@@ -946,6 +948,9 @@ def order_add():
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 403: :py:exc:`.ResourceIDNotFound`
     """
+    from imods import app
+    import stripe
+    stripe.api_key = app.config.get("STRIPE_API_KEY")
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -971,6 +976,23 @@ def order_add():
     except:
         raise
     with db_scoped_session() as se:
+        try:
+            billing_info = BillingInfo.query.get(billing_id)
+            if billing_info.type_ == BillingType.creditcard:
+                user = User.query.get(uid)
+                customer = user.get_or_create_stripe_customer_obj()
+                if customer:
+                    card = billing_info.get_or_create_stripe_card_obj(None)
+                    stripe.Charge.create(
+                        amount=int(quantity*item.price*100),
+                        currency="usd",
+                        customer=customer.id,
+                        card=card.id,
+                        description="imods order#{0}".format(order.oid)
+                    )
+                    order.status = OrderStatus.OrderCompleted
+        except:
+            raise
         se.add(order)
         se.commit()
         return order.get_public()
