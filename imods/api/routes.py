@@ -1,4 +1,4 @@
-from flask import request, session, Blueprint, json
+from flask import request, session, Blueprint, json, app
 from werkzeug import check_password_hash, generate_password_hash
 from imods.models import User, Order, Item, Device, Category, BillingInfo
 from imods.models import UserRole, OrderStatus, Review, WishList
@@ -13,6 +13,7 @@ from imods.api.exceptions import CategorySelfParent, BadJSONData
 from imods.api.exceptions import CategoryNameReserved, InternalException
 from imods.api.exceptions import ResourceUniqueError
 from datetime import datetime
+import boto
 import os
 import operator
 import base64
@@ -709,7 +710,7 @@ def billing_delete(bid):
     return success_response
 
 
-@api_mod.route("/item/list", defaults={"iid": None, 
+@api_mod.route("/item/list", defaults={"iid": None,
                 "pkg_name": None, "cat_name": None})
 @api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None,
                                 "cat_name": None})
@@ -1111,7 +1112,7 @@ def order_stripe_purchase(oid):
         currency=order.currency,
         card=req.get('token'),
         description="Charge for user: {0}, package: {1}, price: {2}".format(
-            order.user.fullname, 
+            order.user.fullname,
             order.pkg_name, total)
     )
 
@@ -1540,6 +1541,7 @@ def wishlist_clear():
 
 
 @api_mod.route("/package/install", methods=["POST"])
+@require_login
 @require_json()
 def package_install():
     """
@@ -1560,9 +1562,10 @@ def package_install():
     :resheader Content-Type: application/json
     :jsonparam array pkg_list: The calculated list of packages to be installed
 
-    :status 200: no error: :py:obj:`.success_response`
+    :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exc:`.BadJSONData`
+    :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
-    :status 405: :py:exc:`.BadJSONData`
     """
     with db_scoped_session() as ses:
         req = request.json
@@ -1579,7 +1582,7 @@ def package_install():
             target_pkgs[pkg_name] = pkg
 
         # Build dependency graph
-        class Pkg(objcet):
+        class Pkg(object):
             def __init__(self, name, version):
                 self.pkg_name = name
                 self.pkg_version = version
@@ -1587,3 +1590,208 @@ def package_install():
 
             def compareVersion(self, pkg):
                 pass
+
+
+@api_mod.route("/package/index")
+@require_login
+@require_json(request=False)
+def package_index():
+    """
+    Return download link to package index file.
+
+    *** Request ***
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam string url: Download link to the package index file.
+    :jsonparam int expires: Expiration time in seconds.
+
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound` Package index doesn't exists.
+    """
+    s3 = boto.connect(profile_name=app.config.get("BOTO_PROFILE"))
+    bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
+
+    pkg_index = bucket.get_key(app.config["pkg_index_file_name"])
+    if pkg_index is None:
+        raise ResourceIDNotFound("Index file not found.")
+
+    expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
+
+    url = pkg_index.generate_url(expires_in=expire)
+    return {'url': url,
+            'url_expires_in': expire
+            }
+
+@api_mod.route("/package/get", methods=["POST"])
+@require_login
+@require_json()
+def package_get():
+    """
+    Get download links to package files(deb or assets).
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :jsonparam array item_ids: A list of item ids.
+    :jsonparam array pkg_names: A list of package names.
+    :jsonparam string type: "assets", "deb" or "all".
+
+    NOTE: When `item_ids` and `pkg_names` are both present, only `item_ids` will be used.
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam array items: A list of items, each item is in the following structure.
+    :jsonparam string item.item_id: Item id of the item
+    :jsonparam string item.pkg_name: Package name of the item.
+    :jsonparam string item.deb_url: Download url of the deb file.
+    :jsonparam int item.url_expires_in: Expiration time of `deb_url`, in seconds
+    :jsonparam json item.assets: A json object contents assets urls.
+    :jsonparam string item.assets.icons.url: URL of icon image.
+    :jsonparam string item.assets.icons.name: Filename of icon image.
+    :jsonparam string item.assets.screenshots.url: URL of item screenshot.
+    :jsonparam string item.assets.screenshots.name: Filename of item screenshot.
+
+    Example:
+    [
+    {
+        "pkg_name":"a",
+        "pkg_ver":"v1",
+        "item_id":10,
+        "deb_url":"https://imods.com/oajd0ajsd0ajsd0ajd0j",
+        "url_expires_in":1800,
+        "assets":{
+            "icons":[
+                {
+                    "url":"https://imods.com/pkg/v1/icon.png",
+                    "name":"icon.png"
+                }
+            ],
+            "screenshots":[
+                {
+                    "url":"https://imods.com/pkg/v1/sshot1.png",
+                    "name":"sshot1.png"
+                }
+            ]
+        }
+    }
+    ]
+
+    :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exec:`.BadJSONData`
+    :status 403: :py:exec:`.UserNotLoggedIn`
+    :status 404: :py:exec:`.ResourceIDNotFound` One or more items are not found.
+    :status 405: :py:exec:`.InsufficientPrivileges` One or items are not available to the user, usually because the user didn't purchase them.
+    """
+    req = request.get_json()
+    pkg_names = req.get('pkg_names')
+    item_ids = req.get('item_ids')
+    res_type = req.get('type')
+
+    if res_type is None or (pkg_names is None and item_ids is None):
+        raise BadJSONData
+
+    if type(item_ids) is not list or type(pkg_names) is not list:
+        raise BadJSONData
+
+    if res_type not in ("assets", "deb", "all"):
+        raise BadJSONData("Invalid type %s" % res_type)
+
+    with db_scoped_session() as ses:
+        items = []
+        if item_ids:
+            for iid in item_ids:
+                item = ses.query(Item).get(iid=iid)
+                if not item:
+                    raise ResourceIDNotFound("Item_id %d is not found" % iid)
+                items.append(item)
+        elif pkg_names:
+            for name in pkg_names:
+                item = ses.query(Item).get(pkg_name=name)
+                if not item:
+                    raise ResourceIDNotFound("Package name %s is not found" % name)
+                items.append(item)
+        else:
+            raise InternalException("This shouldn't happend")
+
+        uid = session['user']['uid']
+        user = ses.query(User).get(uid=uid)
+        if not user:
+            raise InternalException(
+                "User id %d is not found, but user is already logged in, probably a bug!" % uid)
+
+        # Build order history
+        # TODO: Use cache to speed up
+        orders = {}
+        for od in user.orders.get():
+            orders[od.pkg_name] = True
+
+        result = []
+        # Verify user already purchased the item
+        for item in items:
+            # Connect to s3 buckets
+            s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
+            assets_bucket = s3.get_bucket(app.config["S3_ASSETS_BUCKET"])
+
+            # Get paths
+            assets_path = item.pkg_assets_path
+            icons_path = os.path.join(assets_path, 'icons')
+            screenshots_path = os.path.join(assets_path, 'screenshots')
+
+            expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
+
+            # Init result containers
+            assets = {}
+            icons = []
+            screenshots = []
+            res_item = {
+                'pkg_name': item.pkg_name,
+                'pkg_ver': item.pkg_ver,
+                'deb_url': [],
+                'url_expires_in': expire,
+                'assets': {
+                    'icons': [],
+                    'screenshots': []
+                }
+            }
+
+            if res_type in ("assets", "all"):
+                icons_list = assets_bucket.list(icons_path)
+                for icon in icons_list:
+                    if icon.name.endswith('/'):
+                        # Skip subfolders
+                        continue
+                    icon_url = icon.generate_url(force_http=True, query_auth=False)
+                    icon_name = os.path.basename(icon.name)
+                    icons.append(dict(name=icon_name, url=icon_url))
+
+                assets['icons'] = icons
+
+                ss_list = assets_bucket.list(screenshots_path)
+                for sshot in ss_list:
+                    if sshot.name.endswith('/'):
+                        continue
+                    sshot_url = sshot.generate_url(force_http=True, query_auth=False)
+                    sshot_name = os.path.basename(sshot.name)
+                    screenshots.append(dict(name=sshot_name, url=sshot_url))
+
+                assets['screenshots'] = screenshots
+
+            res_item['assets'] = assets
+
+            pkg_bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
+            deb_key = pkg_bucket.get(item.pkg_path)
+            if res_type in ("deb", "all"):
+                # Verify the item is available to the user
+                if orders.get(item.pkg_name) is None:
+                    raise InsufficientPrivileges(
+                        "Item %s(%d) is not purchased." % (item.pkg_name, item.iid))
+                deb_url = deb_key.generate_url(expires_in=expire)
+                res_item['deb_url'] = deb_url
+
+            result.append(res_item)
+
+        return result
