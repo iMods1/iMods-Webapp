@@ -948,7 +948,8 @@ def order_add():
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
-    :status 403: :py:exc:`.ResourceIDNotFound`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.InsufficientPrivileges`
     """
     from imods import app
     import stripe
@@ -968,6 +969,7 @@ def order_add():
     if not item:
         raise ResourceIDNotFound
     try:
+        total_charge = quantity * item.price * 100
         order = Order(uid=uid,
                       billing_id=billing_id,
                       pkg_name=item.pkg_name,
@@ -980,7 +982,7 @@ def order_add():
     with db_scoped_session() as se:
         try:
             billing_info = BillingInfo.query.get(billing_id)
-            if billing_info.type_ == BillingType.creditcard:
+            if billing_info and billing_info.type_ == BillingType.creditcard:
                 user = User.query.get(uid)
                 customer = user.get_or_create_stripe_customer_obj()
                 if customer:
@@ -992,8 +994,14 @@ def order_add():
                         card=card.id,
                         description="imods order#{0}".format(order.oid)
                     )
-                    order.status = OrderStatus.OrderCompleted
+
+            # Check whether if it's a free item
+            if not billing_info and item.price > 0:
+                raise InsufficientPrivileges("Need billing info for non-free items.")
+
+            order.status = OrderStatus.OrderCompleted
         except:
+            se.rollback()
             raise
         se.add(order)
         se.commit()
@@ -1131,15 +1139,18 @@ def order_stripe_purchase(oid):
 
     total = int(order.total_price * 100) # Price in cents
 
-    stripe.Charge.create( amount=total,
-        currency=order.currency,
-        card=req.get('token'),
-        description="Charge for user: {0}, package: {1}, price: {2}".format(
-            order.user.fullname,
-            order.pkg_name, total)
-    )
+    if total > 0:
+        stripe.Charge.create( amount=total,
+            currency=order.currency,
+            card=req.get('token'),
+            description="Charge for user: {0}, package: {1}, price: {2}".format(
+                order.user.fullname,
+                order.pkg_name, total)
+        )
 
-    print "Stripe charge successfully created"
+        print "Stripe charge successfully created"
+    else:
+        print "Total charge is:", total, " skipping stripe charge"
 
     with db_scoped_session() as se:
         se.query(Order).filter_by(oid=oid).update(
