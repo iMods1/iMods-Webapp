@@ -5,14 +5,16 @@ from imods.helpers import db_scoped_session, generate_bucket_key
 from imods.tasks.dpkg import dpkg_update_index, upload_to_s3
 from flask.ext.admin import Admin, expose, helpers, AdminIndexView, BaseView
 from flask.ext.admin.contrib.sqla import ModelView
-from flask import session, redirect, url_for, request
+from flask import session, redirect, url_for, request, flash
 from werkzeug import check_password_hash, generate_password_hash
 import wtforms as wtf
 from flask.ext.wtf import Form as ExtForm
 from apt import debfile
+from apt_pkg import TagSection
 from os import path
 import os
 from tempfile import mkstemp
+import shutil
 
 
 class UserView(ModelView):
@@ -253,6 +255,28 @@ class PackageAssetsView(BaseView):
                 # Get package file
                 package_file = request.files["package_file"]
 
+                _, debTmpFile = mkstemp()
+                with open(debTmpFile, "wb") as local_deb_file:
+                    local_deb_file.write(package_file.read())
+
+                # Verify and update item information based on package file
+                deb_obj = debfile.DebPackage(debTmpFile)
+                item.control = deb_obj.control_content("control")
+                tags = TagSection(item.control)
+                item.dependencies = tags.get("Depends", "")
+                pkg_name = tags.get("Package", None)
+                if (pkg_name is not None) and pkg_name != item.pkg_name:
+                    # Check if the name already exists
+                    t_item = s.query(Item).filter_by(pkg_name=pkg_name).first()
+                    if t_item is None or t_item.iid == item.iid:
+                        item.pkg_name = pkg_name
+                    else:
+                        flash("Package name '%s' is used by another item(%d)."
+                                % (pkg_name, t_item.iid))
+                        s.rollback()
+                        os.unlink(debTmpFile)
+                        return redirect(url_for(".index"))
+
                 pkg_path = path.join(
                     "packages",
                     item.pkg_name)
@@ -268,27 +292,21 @@ class PackageAssetsView(BaseView):
                     item.pkg_path = pkg_s3_key_path
 
 
-                    # Save deb file to the cache folder
                     pkg_local_cache_path = path.join(
                         app.config["UPLOAD_PATH"],
                         pkg_s3_key_path)
 
+                    # Local package path
                     pkg_local_cache_dir = path.dirname(pkg_local_cache_path)
                     if not path.exists(pkg_local_cache_dir):
                         print("Creating path %s" % pkg_local_cache_dir)
                         os.makedirs(pkg_local_cache_dir)
 
-                    with open(pkg_local_cache_path, "wb") as local_deb_file:
-                        print("Writing deb file to %s" % pkg_local_cache_path)
-                        local_deb_file.write(package_file.read())
-
-                    # Update item information based on package file
-                    deb_obj = debfile.DebPackage(pkg_local_cache_path)
-                    item.control = deb_obj.control_content("control")
-                    item.dependencies = deb_obj.depends
+                    # Move tmp deb file to the cache folder
+                    shutil.move(debTmpFile, pkg_local_cache_path)
 
                     pkg_overrides = [(item.pkg_name, "itemid", item.iid),
-                                     (item.pkg_name, "filename", "")]
+                                     (item.pkg_name, "filename", "null")]
 
                     index_s3_key_path = "Packages.gz"
 
@@ -332,7 +350,8 @@ class PackageAssetsView(BaseView):
                 # Commit changes
                 s.commit()
 
-                return redirect(url_for('admin.index'))
+                flash("Assets uploaded successfully")
+                return redirect(url_for('.index'))
 
         context = {'form': form}
         return self.render(self.template_name, **context)
