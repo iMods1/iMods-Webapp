@@ -1682,6 +1682,7 @@ def package_get():
     :jsonparam string item.item_id: Item id of the item
     :jsonparam string item.pkg_name: Package name of the item.
     :jsonparam string item.deb_url: Download url of the deb file.
+    :jsonparam string item.deb_sha1_checksum: SHA1 checksum of the deb file
     :jsonparam int item.url_expires_in: Expiration time of `deb_url`, in seconds
     :jsonparam json item.assets: A json object contents assets urls.
     :jsonparam string item.assets.icons.url: URL of icon image.
@@ -1786,6 +1787,7 @@ def package_get():
             res_item = {
                 'pkg_name': item.pkg_name,
                 'pkg_ver': item.pkg_version,
+                'deb_sha1_checksum': item.pkg_signature,
                 'deb_url': [],
                 'url_expires_in': expire,
                 'assets': {

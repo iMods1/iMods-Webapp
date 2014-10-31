@@ -15,6 +15,7 @@ from os import path
 import os
 from tempfile import mkstemp
 import shutil
+import hashlib
 
 
 class UserView(ModelView):
@@ -258,15 +259,21 @@ class PackageAssetsView(BaseView):
                 _, debTmpFile = mkstemp()
                 with open(debTmpFile, "wb") as local_deb_file:
                     local_deb_file.write(package_file.read())
-
-                # Verify and update item information based on package file
-                deb_obj = debfile.DebPackage(debTmpFile)
-                item.control = deb_obj.control_content("control")
-                tags = TagSection(item.control)
-                item.dependencies = tags.get("Depends", "")
-                pkg_name = tags.get("Package", None)
+                sha1 = hashlib.sha1()
+                sha1.update(open(debTmpFile, 'rb').read())
+                deb_sha1_digest = sha1.hexdigest()
 
                 try:
+                    # Verify and update item information based on package file
+                    deb_obj = debfile.DebPackage(debTmpFile)
+                    item.control = deb_obj.control_content("control")
+                    tags = TagSection(item.control)
+                    item.pkg_dependencies = tags.get("Depends", "")
+                    item.pkg_version = tags.get("Version", "")
+                    item.pkg_signature = deb_sha1_digest
+                    item.description = tags.get("Description", "")
+                    pkg_name = tags.get("Package", None)
+
                     if (pkg_name is not None) and pkg_name != item.pkg_name:
                         # Check if the name already exists
                         t_item = s.query(Item).filter_by(pkg_name=pkg_name).first()
