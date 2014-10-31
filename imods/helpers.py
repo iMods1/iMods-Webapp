@@ -1,7 +1,13 @@
 from imods import db, app
 from contextlib import contextmanager
 from os import path
+import re
 import os
+
+
+supported_code_injectors = {
+    'mobilesubstrate': '^/?Library/MobileSubstrate/DynamicLibraries/.*\.dylib$'
+}
 
 
 @contextmanager
@@ -21,6 +27,20 @@ def generate_bucket_key(path, new_name, old_filename):
     _, ext = os.path.splitext(old_filename)
     filename = new_name + ext
     return os.path.join(path, filename)
+
+
+def detect_tweak(filelist):
+    reg_list = []
+    for _, pat in supported_code_injectors.iteritems():
+        r = re.compile(pat)
+        reg_list.append(r)
+
+    for filepath in filelist:
+        for reg in reg_list:
+            if reg.match(filepath):
+                return filepath
+
+    return None
 
 
 def get_pkg_paths(pkg_name, pkg_ver):

@@ -1,7 +1,7 @@
 from imods import db, app
 from imods.models import User, BillingInfo, Category, Device, Item, Order
 from imods.models import UserRole, BillingType, OrderStatus, Review
-from imods.helpers import db_scoped_session, generate_bucket_key
+from imods.helpers import db_scoped_session, generate_bucket_key, detect_tweak
 from imods.tasks.dpkg import dpkg_update_index, upload_to_s3
 from flask.ext.admin import Admin, expose, helpers, AdminIndexView, BaseView
 from flask.ext.admin.contrib.sqla import ModelView
@@ -265,26 +265,28 @@ class PackageAssetsView(BaseView):
                 tags = TagSection(item.control)
                 item.dependencies = tags.get("Depends", "")
                 pkg_name = tags.get("Package", None)
-                if (pkg_name is not None) and pkg_name != item.pkg_name:
-                    # Check if the name already exists
-                    t_item = s.query(Item).filter_by(pkg_name=pkg_name).first()
-                    if t_item is None or t_item.iid == item.iid:
-                        item.pkg_name = pkg_name
-                    else:
-                        flash("Package name '%s' is used by another item(%d)."
-                                % (pkg_name, t_item.iid))
-                        s.rollback()
-                        os.unlink(debTmpFile)
-                        return redirect(url_for(".index"))
-
-                pkg_path = path.join(
-                    "packages",
-                    item.pkg_name)
-
-                assets_bucket = app.config.get("S3_ASSETS_BUCKET")
-                pkg_bucket = app.config.get("S3_PKG_BUCKET")
 
                 try:
+                    if (pkg_name is not None) and pkg_name != item.pkg_name:
+                        # Check if the name already exists
+                        t_item = s.query(Item).filter_by(pkg_name=pkg_name).first()
+                        if t_item is None or t_item.iid == item.iid:
+                            item.pkg_name = pkg_name
+                        else:
+                            flash("Package name '%s' is used by another item(%d)."
+                                    % (pkg_name, t_item.iid))
+                            s.rollback()
+                            os.unlink(debTmpFile)
+                            return redirect(url_for(".index"))
+
+                    # Build package path
+                    pkg_path = path.join(
+                        "packages",
+                        item.pkg_name)
+
+                    assets_bucket = app.config.get("S3_ASSETS_BUCKET")
+                    pkg_bucket = app.config.get("S3_PKG_BUCKET")
+
                     pkg_s3_key_path = generate_bucket_key(
                         pkg_path,
                         pkg_fullname,
@@ -307,6 +309,15 @@ class PackageAssetsView(BaseView):
 
                     pkg_overrides = [(item.pkg_name, "itemid", item.iid),
                                      (item.pkg_name, "filename", "null")]
+
+                    # Check if it's a tweak
+                    tweak_file = detect_tweak(deb_obj.filelist)
+                    print "tweak_file", tweak_file
+                    if tweak_file is not None:
+                        tweak_file = 'file:///' + tweak_file
+                        pkg_overrides.append((item.pkg_name, "Respring", "YES",))
+                        pkg_overrides.append((item.pkg_name, "TweakLib", tweak_file,))
+
 
                     index_s3_key_path = "Packages.gz"
 

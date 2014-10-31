@@ -20,7 +20,6 @@ def update_overrides_file(repo_path, extra_overrides):
         key = "%s_%s" % (entry[0], entry[1])
         dup[key] = entry
 
-    write_mode = ""
     if path.exists(overrides_file_path):
         overrides_file = gzip.open(overrides_file_path, "rt")
 
@@ -28,16 +27,14 @@ def update_overrides_file(repo_path, extra_overrides):
             entry = line.split()
             key = "%s_%s" % (entry[0], entry[1])
             if key in dup:
-                del dup[key]
                 continue
+            dup[key] = entry
 
         overrides_file.close()
-        write_mode = "at"
     else:
         logging.info("overrides.gz doesn't exist, creating one...")
-        write_mode = "wt"
 
-    overrides_file = gzip.open(overrides_file_path, write_mode)
+    overrides_file = gzip.open(overrides_file_path, "wt")
 
     for _, entry in dup.iteritems():
         overrides_file.write("%s %s %s\n" % (entry[0],
