@@ -279,6 +279,8 @@ class PackageAssetsView(BaseView):
                             os.unlink(debTmpFile)
                             return redirect(url_for(".index"))
 
+                    item.pkg_version = tags.get("Version")
+
                     # Build package path
                     pkg_path = path.join(
                         "packages",
