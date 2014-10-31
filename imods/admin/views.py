@@ -312,7 +312,6 @@ class PackageAssetsView(BaseView):
 
                     # Check if it's a tweak
                     tweak_file = detect_tweak(deb_obj.filelist)
-                    print "tweak_file", tweak_file
                     if tweak_file is not None:
                         tweak_file = 'file:///' + tweak_file
                         pkg_overrides.append((item.pkg_name, "Respring", "YES",))
