@@ -1,7 +1,7 @@
 Package: iModsTestPackage
 Architecture: all
 Maintainer: Ryan Feng
-Depends: coreutils
+Depends: firmware (>= 7.0)
 Priority: optional
 Version: 0.1
 Description: Test package
