@@ -714,13 +714,13 @@ def billing_delete(bid):
 
 
 @api_mod.route("/item/list", defaults={"iid": None,
-                "pkg_name": None, "cat_name": None})
+                "pkg_name": None, "cat_names": None})
 @api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None,
-                                "cat_name": None})
-@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None, "cat_name": None})
-@api_mod.route("/item/cat/<cat_name>", defaults={"iid": None, "pkg_name": None})
+                                "cat_names": None})
+@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None, "cat_names": None})
+@api_mod.route("/item/cat/<cat_names>", defaults={"iid": None, "pkg_name": None})
 @require_json(request=False)
-def item_list(iid, pkg_name, cat_name):
+def item_list(iid, pkg_name, cat_names):
     """
     Get information of an item.
 
@@ -728,6 +728,8 @@ def item_list(iid, pkg_name, cat_name):
 
     :query int iid: item id
     :query str pkg_name: unique package name
+    :query str cat_names: list packges in categories, category names are comma separated
+    E.g. /api/item/cat/Tweaks,Featured will get items under 'Tweaks' OR 'Featured'
 
     *** Response ***
 
@@ -759,12 +761,16 @@ def item_list(iid, pkg_name, cat_name):
         if not item:
             raise ResourceIDNotFound
         return item.get_public()
-    elif cat_name is not None:
-        category = Category.query.filter_by(name=cat_name).first()
-        if not category:
+    elif cat_names is not None:
+        cat_names = cat_names.split(',')
+        categories = Category.query.filter(Category.name.in_(cat_names)).all()
+        if not categories or len(categories) < 1:
             raise ResourceIDNotFound
+        result = set(categories[0].items.all())
+        for i in xrange(1, len(categories)):
+            result &= set(categories[i].items.all())
         get_public = operator.methodcaller('get_public')
-        return map(get_public, category.items.all())
+        return map(get_public, result)
     else:
         limit = request.args.get("limit") or DEFAULT_LIMIT
         if limit > MAX_LIMIT:
@@ -965,17 +971,19 @@ def order_add():
         raise BadJSONData
     quantity = req.get("quantity") or 1
     currency = req.get("currency") or "USD"
+    if quantity < 1:
+        raise BadJSONData("Quantity cannot be less than 1.")
     item = Item.query.get(item_id)
     if not item:
         raise ResourceIDNotFound
     try:
-        total_charge = quantity * item.price * 100
+        total_charge = quantity * item.price
         order = Order(uid=uid,
                       billing_id=billing_id,
                       pkg_name=item.pkg_name,
                       quantity=quantity, currency=currency,
-                      total_price=req['total_price'],
-                      total_charged=req['total_charged'])
+                      total_price=total_charge,
+                      total_charged=total_charge)
         # TODO: Calculate total and return back to client.
     except:
         raise
@@ -1769,6 +1777,28 @@ def package_get():
         result = []
         # Verify user already purchased the item
         for item in items:
+            # If the item is free, generate an order
+            if item.pkg_name not in od:
+                if item.price == 0.0:
+                    with db_scoped_session() as se:
+                        try:
+                            total_charge = 1 * item.price * 100
+                            order = Order(uid=uid,
+                                          billing_id=None,
+                                          pkg_name=item.pkg_name,
+                                          quantity=1, currency='USD',
+                                          total_price=total_charge,
+                                          total_charged=total_charge)
+                            se.add(order)
+                            se.commit()
+                            orders[item.pkg_name] = True
+                        except:
+                            se.rollback()
+                            raise InternalException("Order cannot be added")
+                else:
+                    raise InsufficientPrivileges("Package '%s' need to be purchased before downloading"
+                                                 % item.pkg_name)
+
             # Connect to s3 buckets
             s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
             assets_bucket = s3.get_bucket(app.config["S3_ASSETS_BUCKET"])
