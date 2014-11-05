@@ -764,11 +764,11 @@ def item_list(iid, pkg_name, cat_names):
     elif cat_names is not None:
         cat_names = cat_names.split(',')
         categories = Category.query.filter(Category.name.in_(cat_names)).all()
-        if not categories:
+        if not categories or len(categories) < 1:
             raise ResourceIDNotFound
-        result = []
-        for cat in categories:
-            result.extend(cat.items.all())
+        result = set(categories[0].items.all())
+        for i in xrange(1, len(categories)):
+            result &= set(categories[i].items.all())
         get_public = operator.methodcaller('get_public')
         return map(get_public, result)
     else:

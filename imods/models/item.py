@@ -50,3 +50,6 @@ class Item(db.Model, JSONSerialize):
     def __repr__(self):
         return "<Item '%r'-%r by %r>" % (self.pkg_name, self.pkg_version,
                                          self.author_id)
+
+    def __hash__(self):
+        return self.iid
