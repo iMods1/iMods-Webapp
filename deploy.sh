@@ -82,7 +82,7 @@ main(){
             pip install -r $TEMP_REQUIREMENT_PATH
             rm $TEMP_REQUIREMENT_PATH
             pushd .
-            cd ~/app/extra-dep/python-apt-0.9.3.5/
+            cd ~/app/extra_dep/python-apt-0.9.3.5/
             python setup.py install
             popd
             VENV_DIR=${VENV_DIR-venv}\

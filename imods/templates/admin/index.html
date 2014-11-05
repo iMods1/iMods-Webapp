@@ -10,8 +10,16 @@
             // Add dashboard
         </p>
         {% else %}
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <ul classes="flashes">
+                {% for message in messages %}
+                <li>{{message}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        {% endwith %}
         <form method="POST" action="">
-            <!--<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>-->
             {% for f in form if f.type != 'CSRFTokenField' %}
             <div>
             {{ f.label }}

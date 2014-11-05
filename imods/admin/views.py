@@ -1,16 +1,21 @@
 from imods import db, app
 from imods.models import User, BillingInfo, Category, Device, Item, Order
 from imods.models import UserRole, BillingType, OrderStatus, Review
-from imods.helpers import db_scoped_session, generate_bucket_key
+from imods.helpers import db_scoped_session, generate_bucket_key, detect_tweak
+from imods.tasks.dpkg import dpkg_update_index, upload_to_s3
 from flask.ext.admin import Admin, expose, helpers, AdminIndexView, BaseView
 from flask.ext.admin.contrib.sqla import ModelView
-from flask import session, redirect, url_for, request
+from flask import session, redirect, url_for, request, flash
 from werkzeug import check_password_hash, generate_password_hash
 import wtforms as wtf
 from flask.ext.wtf import Form as ExtForm
-import boto
 from apt import debfile
+from apt_pkg import TagSection
 from os import path
+import os
+from tempfile import mkstemp
+import shutil
+import hashlib
 
 
 class UserView(ModelView):
@@ -159,9 +164,8 @@ class iModsAdminIndexView(AdminIndexView):
         if not session.get('user'):
             return redirect(url_for('.login_view'))
         elif session['user']['role'] != UserRole.SiteAdmin:
-            raise wtf.validators.ValidationError(
-                "You don't have required permission to access this page.")
-        return super(iModsAdminIndexView, self).index()
+            del session['user']
+        return redirect(url_for(".login_view"))
 
     @expose('/login', methods=["GET", "POST"])
     def login_view(self):
@@ -220,6 +224,9 @@ class PackageAssetsUploadForm(ExtForm):
 class PackageAssetsView(BaseView):
     template_name = u"package_assets.html"
 
+    def is_accessible(self):
+        return session.get('user') is not None
+
     @expose('/', methods=["GET", "POST"])
     def index(self):
 
@@ -238,60 +245,123 @@ class PackageAssetsView(BaseView):
                 screenshot = request.files["screenshot"]
                 # Get pkg_assets_path
                 item = s.query(Item).get(form.item_id.data)
-                pkg_fullname = item.pkg_name + '-' + str(item.pkg_version)
-                base_path = path.join(
-                    "packages",
-                    item.pkg_name,
-                    pkg_fullname,
-                    'assets')
-                item.pkg_assets_path = base_path
-
                 # Get package file
                 package_file = request.files["package_file"]
 
-                deb_file_path = path.join(app.config["UPLOAD_PATH"],
-                                          package_file.filename)
-                deb_file = open(deb_file_path, "w")
-                deb_file.write(package_file.read())
-                deb_file.close()
-                deb_obj = debfile.DebPackage(deb_file_path)
-
-                # Update item information based on package file
-                item.control = deb_obj.control_content("control")
-                item.dependencies = deb_obj.depends
-
-                pkg_path = path.join(
-                    "packages",
-                    item.pkg_name)
-                item.pkg_path = pkg_path
+                _, debTmpFile = mkstemp()
+                with open(debTmpFile, "wb") as local_deb_file:
+                    local_deb_file.write(package_file.read())
+                sha1 = hashlib.sha1()
+                sha1.update(open(debTmpFile, 'rb').read())
+                deb_sha1_digest = sha1.hexdigest()
 
                 try:
-                    # Connect to S3 Bucket
-                    s3 = boto.connect_s3(
-                        profile_name=app.config.get("BOTO_PROFILE"))
-                    bucket = s3.get_bucket('imods')
+                    # Verify and update item information based on package file
+                    deb_obj = debfile.DebPackage(debTmpFile)
+                    item.control = deb_obj.control_content("control")
+                    tags = TagSection(item.control)
+                    item.pkg_dependencies = tags.get("Depends", "")
+                    item.pkg_version = tags.get("Version", "")
+                    item.pkg_signature = deb_sha1_digest
+                    item.description = tags.get("Description", "")
 
-                    # Connect to S3 package bucket
-                    pkg_bucket = s3.get_bucket('imods_package')
-                    pkg_file = pkg_bucket.new_key(
-                        generate_bucket_key(pkg_path, pkg_fullname,
-                                            package_file.filename))
+                    # Create local package path
+                    pkg_fullname = item.pkg_name + '-' + str(item.pkg_version)
+                    base_path = path.join(
+                        "packages",
+                        item.pkg_name,
+                        pkg_fullname,
+                        'assets')
+                    item.pkg_assets_path = base_path
+
+                    pkg_name = tags.get("Package", None)
+
+                    if (pkg_name is not None) and pkg_name != item.pkg_name:
+                        # Check if the name already exists
+                        t_item = s.query(Item).filter_by(pkg_name=pkg_name).first()
+                        if t_item is None or t_item.iid == item.iid:
+                            item.pkg_name = pkg_name
+                        else:
+                            flash("Package name '%s' is used by another item(%d)."
+                                    % (pkg_name, t_item.iid))
+                            s.rollback()
+                            os.unlink(debTmpFile)
+                            return redirect(url_for(".index"))
+
+                    # Build package path
+                    pkg_path = path.join(
+                        "packages",
+                        item.pkg_name)
+
+                    assets_bucket = app.config.get("S3_ASSETS_BUCKET")
+                    pkg_bucket = app.config.get("S3_PKG_BUCKET")
+
+                    pkg_s3_key_path = generate_bucket_key(
+                        pkg_path,
+                        pkg_fullname,
+                        package_file.filename)
+                    item.pkg_path = pkg_s3_key_path
+
+
+                    pkg_local_cache_path = path.join(
+                        app.config["UPLOAD_PATH"],
+                        pkg_s3_key_path)
+
+                    # Local package path
+                    pkg_local_cache_dir = path.dirname(pkg_local_cache_path)
+                    if not path.exists(pkg_local_cache_dir):
+                        print("Creating path %s" % pkg_local_cache_dir)
+                        os.makedirs(pkg_local_cache_dir)
+
+                    # Move tmp deb file to the cache folder
+                    shutil.move(debTmpFile, pkg_local_cache_path)
+
+                    pkg_overrides = [(item.pkg_name, "itemid", item.iid),
+                                     (item.pkg_name, "filename", "null")]
+
+                    # Check if it's a tweak
+                    tweak_file = detect_tweak(deb_obj.filelist)
+                    if tweak_file is not None:
+                        tweak_file = 'file:///' + tweak_file
+                        pkg_overrides.append((item.pkg_name, "Respring", "YES",))
+                        pkg_overrides.append((item.pkg_name, "TweakLib", tweak_file,))
+
+
+                    index_s3_key_path = "Packages.gz"
 
                     # Upload deb file
-                    pkg_file.set_contents_from_string(package_file.read())
+                    upload_to_s3.delay(pkg_bucket,
+                                       pkg_s3_key_path,
+                                       pkg_local_cache_path)
+                    pkg_index_file = path.join(app.config["UPLOAD_PATH"],
+                                               app.config["PKG_INDEX_FILE_NAME"]
+                                               )
+                    # Update and upload package index
+                    dpkg_update_index.delay(app.config["UPLOAD_PATH"],
+                                            pkg_bucket,
+                                            index_s3_key_path,
+                                            pkg_index_file,
+                                            pkg_overrides)
 
                     # Upload icon
                     icon_base_path = path.join(base_path, "icons")
-                    icon = bucket.new_key(
-                        generate_bucket_key(icon_base_path, "app_icon",
-                                            app_icon.filename))
-                    icon.set_contents_from_string(app_icon.read())
+                    icon_s3_path = generate_bucket_key(icon_base_path,
+                                                       "app_icon",
+                                                       app_icon.filename)
+                    _, icon_tmpfile = mkstemp()
+                    with open(icon_tmpfile, "wb") as tmp:
+                        tmp.write(app_icon.read())
+                    upload_to_s3.delay(assets_bucket, icon_s3_path, icon_tmpfile, True)
 
                     # Upload screenshot
                     ss_base_path = path.join(base_path, "screenshots")
-                    sshot = bucket.new_key(generate_bucket_key(ss_base_path,
-                                           "screenshot", screenshot.filename))
-                    sshot.set_contents_from_string(screenshot.read())
+                    sshot_s3_path = generate_bucket_key(ss_base_path,
+                                                        "screenshot",
+                                                        screenshot.filename)
+                    _, sshot_tmpfile = mkstemp()
+                    with open(sshot_tmpfile, "wb") as tmp:
+                        tmp.write(screenshot.read())
+                    upload_to_s3.delay(assets_bucket, sshot_s3_path, sshot_tmpfile, True)
                 except Exception as e:
                     s.rollback()
                     raise e
@@ -299,7 +369,8 @@ class PackageAssetsView(BaseView):
                 # Commit changes
                 s.commit()
 
-                return redirect(url_for('admin.index'))
+                flash("Assets uploaded successfully")
+                return redirect(url_for('.index'))
 
         context = {'form': form}
         return self.render(self.template_name, **context)

@@ -16,10 +16,6 @@ class Item(db.Model, JSONSerialize):
                   "add_date", "last_update_date")
     iid = db.Column(db.Integer, primary_key=True, nullable=False,
                     autoincrement=True)
-    # ON DELETE CASCADE prevents the category from being deleted if it has at
-    # least one item associated with it.
-    category_id = db.Column(db.Integer,
-                            db.ForeignKey("CATEGORY.cid", ondelete="CASCADE"))
     # author_id can be NULL because an item may be from a foreign source,
     # e.g. libc is standard c library and the author may not be present in
     # the database, so the author_id should be NULL
@@ -34,7 +30,7 @@ class Item(db.Model, JSONSerialize):
     pkg_path = db.Column(db.String())
     pkg_assets_path = db.Column(db.String())
     pkg_dependencies = db.Column(db.String())
-    price = db.Column(db.Float())
+    price = db.Column(db.Float(), default=0.0, nullable=False)
     summary = db.Column(db.String(500))
     description = db.Column(db.String())
     # The content of the control file of a debian package
@@ -54,3 +50,6 @@ class Item(db.Model, JSONSerialize):
     def __repr__(self):
         return "<Item '%r'-%r by %r>" % (self.pkg_name, self.pkg_version,
                                          self.author_id)
+
+    def __hash__(self):
+        return self.iid

@@ -1,5 +1,7 @@
 from flask import request, session, Blueprint, json
 from werkzeug import check_password_hash, generate_password_hash
+from imods import app
+from imods.models.constants import BillingType
 from imods.models import User, Order, Item, Device, Category, BillingInfo
 from imods.models import UserRole, OrderStatus, Review, WishList
 from imods.decorators import require_login, require_json
@@ -13,6 +15,7 @@ from imods.api.exceptions import CategorySelfParent, BadJSONData
 from imods.api.exceptions import CategoryNameReserved, InternalException
 from imods.api.exceptions import ResourceUniqueError
 from datetime import datetime
+import boto
 import os
 import operator
 import base64
@@ -354,6 +357,7 @@ def category_list(cid, name):
     :jsonparam int parent_id: parent category id
     :jsonparam string name: name of the category
     :jsonparam string description: description of the category
+    :jsonparam array items: list of items included in the category
 
     _NOTE: /category/name/<name> returns a list(array) of categories_
 
@@ -513,8 +517,7 @@ def category_delete(cid):
     with db_scoped_session() as se:
         category = se.query(Category).get(cid)
         children = se.query(Category).filter_by(parent_id=cid).first()
-        items = se.query(Item).filter_by(category_id=cid).first()
-        if children or items:
+        if children:
             raise CategoryNotEmpty()
         se.delete(category)
         se.commit()
@@ -542,12 +545,16 @@ def billing_list(bid):
     :jsonparam string state: state
     :jsonparam string country: country
     :jsonparam string type_: payment method type, see :py:class:`.BillingType`
+    :jsonparam string cc_no: last 4 digits of credit card number
+    :jsonparam string cc_name: name on credit card
 
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
+    uid = session['user']['uid']
+    user = User.query.get(uid)
     if bid is not None:
         billing = BillingInfo.query.get(bid)
         if not billing:
@@ -558,7 +565,7 @@ def billing_list(bid):
         if limit > MAX_LIMIT:
             limit = MAX_LIMIT
         page = request.args.get("page") or 0
-        billings = BillingInfo.query
+        billings = user.billing_methods
         billings.offset(page*limit)
         billings.limit(limit)
         billings = billings.all()
@@ -619,6 +626,7 @@ def billing_add():
     with db_scoped_session() as se:
         se.add(billing)
         se.commit()
+        billing.get_or_create_stripe_card_obj(cc_cvv)
         return billing.get_public()
 
 
@@ -705,11 +713,14 @@ def billing_delete(bid):
     return success_response
 
 
-@api_mod.route("/item/list", defaults={"iid": None})
-@api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None})
-@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None})
+@api_mod.route("/item/list", defaults={"iid": None,
+                "pkg_name": None, "cat_names": None})
+@api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None,
+                                "cat_names": None})
+@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None, "cat_names": None})
+@api_mod.route("/item/cat/<cat_names>", defaults={"iid": None, "pkg_name": None})
 @require_json(request=False)
-def item_list(iid, pkg_name):
+def item_list(iid, pkg_name, cat_names):
     """
     Get information of an item.
 
@@ -717,6 +728,8 @@ def item_list(iid, pkg_name):
 
     :query int iid: item id
     :query str pkg_name: unique package name
+    :query str cat_names: list packges in categories, category names are comma separated
+    E.g. /api/item/cat/Tweaks,Featured will get items under 'Tweaks' OR 'Featured'
 
     *** Response ***
 
@@ -748,6 +761,16 @@ def item_list(iid, pkg_name):
         if not item:
             raise ResourceIDNotFound
         return item.get_public()
+    elif cat_names is not None:
+        cat_names = cat_names.split(',')
+        categories = Category.query.filter(Category.name.in_(cat_names)).all()
+        if not categories or len(categories) < 1:
+            raise ResourceIDNotFound
+        result = set(categories[0].items.all())
+        for i in xrange(1, len(categories)):
+            result &= set(categories[i].items.all())
+        get_public = operator.methodcaller('get_public')
+        return map(get_public, result)
     else:
         limit = request.args.get("limit") or DEFAULT_LIMIT
         if limit > MAX_LIMIT:
@@ -771,7 +794,6 @@ def item_add():
 
     *** Request ***
 
-    :jsonparam int category_id: category id
     :jsonparam string pkg_name: package name
     :jsonparam string display_name: display name of the package
     :jsonparam string pkg_version: package version
@@ -792,8 +814,7 @@ def item_add():
     if type(req) is not dict:
         req = dict(json.loads(req))
     author_id = req.get("author_id") or session['user']['author_identifier']
-    item = Item(category_id=req.get('category_id'),
-                pkg_name=req['pkg_name'],
+    item = Item(pkg_name=req['pkg_name'],
                 pkg_version=req['pkg_version'],
                 display_name=req['display_name'],
                 author_id=author_id,
@@ -933,8 +954,12 @@ def order_add():
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     :status 403: :py:exc:`.UserNotLoggedIn`
-    :status 403: :py:exc:`.ResourceIDNotFound`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 405: :py:exc:`.InsufficientPrivileges`
     """
+    from imods import app
+    import stripe
+    stripe.api_key = app.config.get("STRIPE_API_KEY")
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
@@ -946,20 +971,46 @@ def order_add():
         raise BadJSONData
     quantity = req.get("quantity") or 1
     currency = req.get("currency") or "USD"
+    if quantity < 1:
+        raise BadJSONData("Quantity cannot be less than 1.")
     item = Item.query.get(item_id)
     if not item:
         raise ResourceIDNotFound
     try:
+        total_charge = quantity * item.price
         order = Order(uid=uid,
                       billing_id=billing_id,
                       pkg_name=item.pkg_name,
                       quantity=quantity, currency=currency,
-                      total_price=req['total_price'],
-                      total_charged=req['total_charged'])
+                      total_price=total_charge,
+                      total_charged=total_charge)
         # TODO: Calculate total and return back to client.
     except:
         raise
     with db_scoped_session() as se:
+        try:
+            billing_info = BillingInfo.query.get(billing_id)
+            if billing_info and billing_info.type_ == BillingType.creditcard:
+                user = User.query.get(uid)
+                customer = user.get_or_create_stripe_customer_obj()
+                if customer:
+                    card = billing_info.get_or_create_stripe_card_obj(None)
+                    stripe.Charge.create(
+                        amount=int(quantity*item.price*100),
+                        currency="usd",
+                        customer=customer.id,
+                        card=card.id,
+                        description="imods order#{0}".format(order.oid)
+                    )
+
+            # Check whether if it's a free item
+            if not billing_info and item.price > 0:
+                raise InsufficientPrivileges("Need billing info for non-free items.")
+
+            order.status = OrderStatus.OrderCompleted
+        except:
+            se.rollback()
+            raise
         se.add(order)
         se.commit()
         return order.get_public()
@@ -1020,6 +1071,103 @@ def order_list(oid):
         get_public = operator.methodcaller('get_public')
         return map(get_public, orders)
 
+@api_mod.route("/order/user_item_purchases/<int:iid>")
+@require_login
+@require_json(request=False)
+def order_user_item_purchases(iid):
+    """
+    Get information of all a user's orders by item id
+
+    *** Request ***
+
+    :param int iid: item id
+
+    *** Response ***
+
+    :jsonparam int oid: order id
+    :jsonparam int uid: user id
+    :jsonparam string pkg_name: package name
+    :jsonparam int quantity: quantity
+    :jsonparam string currency: currency
+    :jsonparam int status: order status, :py:class:`.OrderStatus`
+    :jsonparam int billing_id: billing method id
+    :jsonparam float total_price: total price
+    :jsonparam float total_charged: total charged
+    :jsonparam string order_date: the date of order placed
+    :jsonparam dict billing: billing info
+    :jsonparam dict item: item info
+
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
+
+    uid = session['user']['uid']
+    user = User.query.get(uid)
+    orders = user.orders.filter_by(status=OrderStatus.OrderCompleted) \
+            .filter(Order.item.has(iid=iid)).all()
+    get_public = operator.methodcaller('get_public')
+    return map(get_public, orders)
+
+@api_mod.route("/order/stripe_purchase/<int:oid>", methods=["POST"])
+@require_login
+@require_json()
+def order_stripe_purchase(oid):
+    """
+    Creates a new Stripe charge for the amount for the specified order
+
+    *** Request ***
+
+    :param int oid: order id
+    :jsonparam string token: Stripe card token to charge
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 402: :py:exc:`.RequestFailed`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
+    from imods import app
+    import stripe
+
+    uid = session['user']['uid']
+    order = Order.query.get(oid)
+    req = request.get_json()
+    if not order:
+        raise ResourceIDNotFound()
+    if order.uid != uid:
+        raise InsufficientPrivileges()
+    stripe.api_key = app.config.get('STRIPE_API_KEY')
+
+    total = int(order.total_price * 100) # Price in cents
+
+    if total > 0:
+        stripe.Charge.create( amount=total,
+            currency=order.currency,
+            card=req.get('token'),
+            description="Charge for user: {0}, package: {1}, price: {2}".format(
+                order.user.fullname,
+                order.pkg_name, total)
+        )
+
+        print "Stripe charge successfully created"
+    else:
+        print "Total charge is:", total, " skipping stripe charge"
+
+    with db_scoped_session() as se:
+        se.query(Order).filter_by(oid=oid).update(
+            {'status': OrderStatus.OrderCompleted}
+        )
+        se.commit()
+    print "Order successfully updated"
+
+    return success_response
 
 @api_mod.route("/order/update/<int:oid>", methods=["POST"])
 @require_login
@@ -1435,6 +1583,7 @@ def wishlist_clear():
 
 
 @api_mod.route("/package/install", methods=["POST"])
+@require_login
 @require_json()
 def package_install():
     """
@@ -1455,9 +1604,10 @@ def package_install():
     :resheader Content-Type: application/json
     :jsonparam array pkg_list: The calculated list of packages to be installed
 
-    :status 200: no error: :py:obj:`.success_response`
+    :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exc:`.BadJSONData`
+    :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
-    :status 405: :py:exc:`.BadJSONData`
     """
     with db_scoped_session() as ses:
         req = request.json
@@ -1474,7 +1624,7 @@ def package_install():
             target_pkgs[pkg_name] = pkg
 
         # Build dependency graph
-        class Pkg(objcet):
+        class Pkg(object):
             def __init__(self, name, version):
                 self.pkg_name = name
                 self.pkg_version = version
@@ -1482,3 +1632,234 @@ def package_install():
 
             def compareVersion(self, pkg):
                 pass
+
+
+@api_mod.route("/package/index")
+@require_login
+@require_json(request=False)
+def package_index():
+    """
+    Return download link to package index file.
+
+    *** Request ***
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam string url: Download link to the package index file.
+    :jsonparam int expires: Expiration time in seconds.
+
+    :status 200: no error :py:obj:`.success_response`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    :status 404: :py:exc:`.ResourceIDNotFound` Package index doesn't exists.
+    """
+    s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
+    bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
+
+    pkg_index = bucket.get_key(app.config["PKG_INDEX_FILE_NAME"])
+    if pkg_index is None:
+        raise ResourceIDNotFound("Index file not found.")
+
+    expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
+
+    url = pkg_index.generate_url(expires_in=expire)
+    return {'url': url,
+            'url_expires_in': expire
+            }
+
+@api_mod.route("/package/get", methods=["POST"])
+@require_login
+@require_json()
+def package_get():
+    """
+    Get download links to package files(deb or assets).
+
+    *** Request ***
+
+    :reqheader Content-Type: application/json
+    :jsonparam array item_ids: A list of item ids.
+    :jsonparam array pkg_names: A list of package names.
+    :jsonparam string type: "assets", "deb" or "all".
+
+    NOTE: When `item_ids` and `pkg_names` are both present, only `item_ids` will be used.
+
+    *** Response ***
+
+    :resheader Content-Type: application/json
+    :jsonparam array items: A list of items, each item is in the following structure.
+    :jsonparam string item.item_id: Item id of the item
+    :jsonparam string item.pkg_name: Package name of the item.
+    :jsonparam string item.deb_url: Download url of the deb file.
+    :jsonparam string item.deb_sha1_checksum: SHA1 checksum of the deb file
+    :jsonparam int item.url_expires_in: Expiration time of `deb_url`, in seconds
+    :jsonparam json item.assets: A json object contents assets urls.
+    :jsonparam string item.assets.icons.url: URL of icon image.
+    :jsonparam string item.assets.icons.name: Filename of icon image.
+    :jsonparam string item.assets.screenshots.url: URL of item screenshot.
+    :jsonparam string item.assets.screenshots.name: Filename of item screenshot.
+
+    Example:
+    [
+    {
+        "pkg_name":"a",
+        "pkg_ver":"v1",
+        "item_id":10,
+        "deb_url":"https://imods.com/oajd0ajsd0ajsd0ajd0j",
+        "url_expires_in":1800,
+        "assets":{
+            "icons":[
+                {
+                    "url":"https://imods.com/pkg/v1/icon.png",
+                    "name":"icon.png"
+                }
+            ],
+            "screenshots":[
+                {
+                    "url":"https://imods.com/pkg/v1/sshot1.png",
+                    "name":"sshot1.png"
+                }
+            ]
+        }
+    }
+    ]
+
+    :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exec:`.BadJSONData`
+    :status 403: :py:exec:`.UserNotLoggedIn`
+    :status 404: :py:exec:`.ResourceIDNotFound` One or more items are not found.
+    :status 405: :py:exec:`.InsufficientPrivileges` One or items are not available to the user, usually because the user didn't purchase them.
+    """
+    req = request.get_json()
+    pkg_names = req.get('pkg_names')
+    item_ids = req.get('item_ids')
+    res_type = req.get('type')
+
+    if res_type is None or (pkg_names is None and item_ids is None):
+        raise BadJSONData
+
+    if item_ids and type(item_ids) is not list:
+        raise BadJSONData
+    if pkg_names and type(pkg_names) is not list:
+        raise BadJSONData
+
+    if res_type not in ("assets", "deb", "all"):
+        raise BadJSONData("Invalid type %s" % res_type)
+
+    with db_scoped_session() as ses:
+        items = []
+        if item_ids:
+            for iid in item_ids:
+                item = ses.query(Item).get(iid)
+                if not item:
+                    raise ResourceIDNotFound("Item_id '%d' is not found" % iid)
+                items.append(item)
+        elif pkg_names:
+            for name in pkg_names:
+                item = ses.query(Item).filter_by(pkg_name=name).first()
+                if not item:
+                    raise ResourceIDNotFound("Package name '%s' is not found" % name)
+                items.append(item)
+        else:
+            raise InternalException("This shouldn't happend")
+
+        uid = session['user']['uid']
+        user = ses.query(User).get(uid)
+        if not user:
+            raise InternalException(
+                "User id %d is not found, but user is already logged in, probably a bug!" % uid)
+
+        # Build order history
+        # TODO: Use cache to speed up
+        orders = {}
+        for od in user.orders.all():
+            orders[od.pkg_name] = True
+
+        result = []
+        # Verify user already purchased the item
+        for item in items:
+            # If the item is free, generate an order
+            if item.pkg_name not in orders:
+                if item.price == 0.0:
+                    with db_scoped_session() as se:
+                        try:
+                            total_charge = 1 * item.price * 100
+                            order = Order(uid=uid,
+                                          billing_id=None,
+                                          pkg_name=item.pkg_name,
+                                          quantity=1, currency='USD',
+                                          total_price=total_charge,
+                                          total_charged=total_charge)
+                            se.add(order)
+                            se.commit()
+                            orders[item.pkg_name] = True
+                        except:
+                            se.rollback()
+                            raise InternalException("Order cannot be added")
+                else:
+                    raise InsufficientPrivileges("Package '%s' need to be purchased before downloading"
+                                                 % item.pkg_name)
+
+            # Connect to s3 buckets
+            s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
+            assets_bucket = s3.get_bucket(app.config["S3_ASSETS_BUCKET"])
+
+            # Get paths
+            assets_path = item.pkg_assets_path
+            icons_path = os.path.join(assets_path, 'icons')
+            screenshots_path = os.path.join(assets_path, 'screenshots')
+
+            expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
+
+            # Init result containers
+            assets = {}
+            icons = []
+            screenshots = []
+            res_item = {
+                'pkg_name': item.pkg_name,
+                'pkg_ver': item.pkg_version,
+                'deb_sha1_checksum': item.pkg_signature,
+                'deb_url': [],
+                'url_expires_in': expire,
+                'assets': {
+                    'icons': [],
+                    'screenshots': []
+                }
+            }
+
+            if res_type in ("assets", "all"):
+                icons_list = assets_bucket.list(icons_path)
+                for icon in icons_list:
+                    if icon.name.endswith('/'):
+                        # Skip subfolders
+                        continue
+                    icon_url = icon.generate_url(expire)
+                    icon_name = os.path.basename(icon.name)
+                    icons.append(dict(name=icon_name, url=icon_url))
+
+                assets['icons'] = icons
+
+                ss_list = assets_bucket.list(screenshots_path)
+                for sshot in ss_list:
+                    if sshot.name.endswith('/'):
+                        continue
+                    sshot_url = sshot.generate_url(expire)
+                    sshot_name = os.path.basename(sshot.name)
+                    screenshots.append(dict(name=sshot_name, url=sshot_url))
+
+                assets['screenshots'] = screenshots
+
+            res_item['assets'] = assets
+
+            pkg_bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
+            deb_key = pkg_bucket.get_key(item.pkg_path)
+            if res_type in ("deb", "all"):
+                # Verify the item is available to the user
+                if orders.get(item.pkg_name) is None:
+                    raise InsufficientPrivileges(
+                        "Item %s(%d) is not purchased." % (item.pkg_name, item.iid))
+                deb_url = deb_key.generate_url(expires_in=expire)
+                res_item['deb_url'] = deb_url
+
+            result.append(res_item)
+
+        return result
