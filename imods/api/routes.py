@@ -1778,7 +1778,7 @@ def package_get():
         # Verify user already purchased the item
         for item in items:
             # If the item is free, generate an order
-            if item.pkg_name not in od:
+            if item.pkg_name not in orders:
                 if item.price == 0.0:
                     with db_scoped_session() as se:
                         try:
