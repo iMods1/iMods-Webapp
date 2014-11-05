@@ -714,10 +714,10 @@ def billing_delete(bid):
 
 
 @api_mod.route("/item/list", defaults={"iid": None,
-                "pkg_name": None, "cat_name": None})
+                "pkg_name": None, "cat_names": None})
 @api_mod.route("/item/id/<int:iid>", defaults={"pkg_name": None,
-                                "cat_name": None})
-@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None, "cat_name": None})
+                                "cat_names": None})
+@api_mod.route("/item/pkg/<pkg_name>", defaults={"iid": None, "cat_names": None})
 @api_mod.route("/item/cat/<cat_names>", defaults={"iid": None, "pkg_name": None})
 @require_json(request=False)
 def item_list(iid, pkg_name, cat_names):
