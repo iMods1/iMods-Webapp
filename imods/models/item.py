@@ -30,7 +30,7 @@ class Item(db.Model, JSONSerialize):
     pkg_path = db.Column(db.String())
     pkg_assets_path = db.Column(db.String())
     pkg_dependencies = db.Column(db.String())
-    price = db.Column(db.Float())
+    price = db.Column(db.Float(), default=0.0, nullable=False)
     summary = db.Column(db.String(500))
     description = db.Column(db.String())
     # The content of the control file of a debian package
