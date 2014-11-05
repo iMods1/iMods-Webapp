@@ -971,11 +971,13 @@ def order_add():
         raise BadJSONData
     quantity = req.get("quantity") or 1
     currency = req.get("currency") or "USD"
+    if quantity < 1:
+        raise BadJSONData("Quantity cannot be less than 1.")
     item = Item.query.get(item_id)
     if not item:
         raise ResourceIDNotFound
     try:
-        total_charge = quantity * item.price * 100
+        total_charge = quantity * item.price
         order = Order(uid=uid,
                       billing_id=billing_id,
                       pkg_name=item.pkg_name,

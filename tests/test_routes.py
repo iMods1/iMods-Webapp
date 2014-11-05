@@ -410,7 +410,8 @@ class TestRoutes(unittest.TestCase):
             assert js1["billing_id"] == data3["billing_id"]
             assert js1["pkg_name"] == data1["pkg_name"]
             assert js1["total_price"] == data3["total_price"]
-            assert js1["total_charged"] == data3["total_charged"]
+            # Don't verify total_cahred, because it will be calculated by the
+            # server
             assert js1["quantity"] == 1
             assert js1["currency"] == "USD"
             assert js1["item"]["pkg_name"] == data1["pkg_name"]
@@ -422,7 +423,6 @@ class TestRoutes(unittest.TestCase):
             assert js2["billing_id"] == data3["billing_id"]
             assert js2["pkg_name"] == data1["pkg_name"]
             assert js2["total_price"] == data3["total_price"]
-            assert js2["total_charged"] == data3["total_charged"]
             assert js2["quantity"] == 1
             assert js2["currency"] == "USD"
 
