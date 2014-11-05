@@ -245,14 +245,6 @@ class PackageAssetsView(BaseView):
                 screenshot = request.files["screenshot"]
                 # Get pkg_assets_path
                 item = s.query(Item).get(form.item_id.data)
-                pkg_fullname = item.pkg_name + '-' + str(item.pkg_version)
-                base_path = path.join(
-                    "packages",
-                    item.pkg_name,
-                    pkg_fullname,
-                    'assets')
-                item.pkg_assets_path = base_path
-
                 # Get package file
                 package_file = request.files["package_file"]
 
@@ -272,6 +264,16 @@ class PackageAssetsView(BaseView):
                     item.pkg_version = tags.get("Version", "")
                     item.pkg_signature = deb_sha1_digest
                     item.description = tags.get("Description", "")
+
+                    # Create local package path
+                    pkg_fullname = item.pkg_name + '-' + str(item.pkg_version)
+                    base_path = path.join(
+                        "packages",
+                        item.pkg_name,
+                        pkg_fullname,
+                        'assets')
+                    item.pkg_assets_path = base_path
+
                     pkg_name = tags.get("Package", None)
 
                     if (pkg_name is not None) and pkg_name != item.pkg_name:
