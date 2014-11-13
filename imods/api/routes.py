@@ -367,7 +367,8 @@ def user_register():
         except:
             se.rollback()
         try:
-            send_confirmation_email(req["email"])
+            if not app.config.get('TESTING'):
+                send_confirmation_email(req["email"])
         except:
             pass
         return newuser.get_public()
