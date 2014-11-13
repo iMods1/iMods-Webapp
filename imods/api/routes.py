@@ -1,4 +1,4 @@
-from flask import request, session, Blueprint, json, render_template, url_for, abort
+from flask import request, session, Blueprint, json, render_template, url_for, abort, redirect
 from werkzeug import check_password_hash, generate_password_hash
 from imods import app
 from imods.models.constants import BillingType, AccountStatus
@@ -7,6 +7,7 @@ from imods.models import UserRole, OrderStatus, Review, WishList
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session, generate_onetime_token, check_onetime_token
+from imods.helpers import detect_ios_by_useragent
 from imods.api.exceptions import setup_api_exceptions
 from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
@@ -93,19 +94,23 @@ def send_confirmation_email(email):
 
 
 def send_reset_password_email(email):
-    token = generate_onetime_token(email, 'user_reset_password')
-    print token
-    query = urllib.urlencode([('email', email),
-                              ('token', token)])
-    imods_link_url = urlparse.urlunsplit(['imods',
-                                          'user',
-                                          'reset_password',
-                                          query,
-                                          ''])
-    imods_link_text = "Reset password"
+    token = generate_onetime_token(email, 'user_reset_password', 60*60*24)
+    #query = urllib.urlencode([('email', email),
+                              #('token', token)])
+    #imods_link_url = urlparse.urlunsplit(['imods',
+                                          #'user',
+                                          #'reset_password',
+                                          #query,
+                                          #''])
+    #imods_link_text = "Reset password"
+    link_url = url_for(".user_reset_password_client",
+                       _external=True,
+                       email=email,
+                       token=token)
+    link_text = "Reset password"
     html_body = render_template('email/reset_password.html',
-                                imods_link_url=imods_link_url,
-                                imods_link_text=imods_link_text)
+                                link_url=link_url,
+                                link_text=link_text)
     ses = boto.ses.connect_to_region("us-east-1",
                                      profile_name=app.config.get("BOTO_PROFILE")
                                      )
@@ -220,14 +225,59 @@ def user_request_password():
     return success_response
 
 
+@api_mod.route("/user/reset_password_client")
+def user_reset_password_client():
+    """
+    Handle URl requests from user's email, it redirects to the custom
+    url since Gmail strips them all.
+
+    *** Request ***
+    :queryparam string email: user email
+    :queryparam string token: access token
+
+    *** Response ***
+
+    :status 301: Redirect to custom url
+    :status 404: Block desktop users
+    """
+    # Request from the client, use user-agent to detect whether it's
+    # from iOS or desktop
+    email = request.args.get("email").strip()
+    token = request.args.get("token").strip()
+    if len(email) == 0 or len(token) == 0:
+        abort(404)
+    return render_template("user/reset_password.html",
+                           post_url=url_for(".user_reset_password"),
+                            email=email,
+                            token=token)
+    user_agent = request.headers.get('User-Agent')
+    #if detect_ios_by_useragent(user_agent):
+        # Redirct to custom url
+        #email = request.args.get("email").strip()
+        #token = request.args.get("token").strip()
+        #if len(email) == 0 or len(token) == 0:
+            #abort(404)
+        #query = urllib.urlencode([('email', email),
+                                #('token', token)])
+        #imods_link_url = urlparse.urlunsplit(['imods',
+                                            #'user',
+                                            #'reset_password',
+                                            #query,
+                                            #''])
+        #print 'redirct:', imods_link_url
+        #return redirect(imods_link_url)
+    # Block desktop users
+
+
 @api_mod.route("/user/reset_password", methods=["POST"])
-@require_json()
+#@require_json()
 def user_reset_password():
     """
     Reset user's password.
 
     *** Request ***
     :jsonparam string email: email address of the user
+    :jsonparam string token: access token
     :jsonparam string new_password: new password
 
     *** Response ***
@@ -239,9 +289,8 @@ def user_reset_password():
     :status 403: :py:exc:`.InvalidToken`
     :status 404: :py:exc:`.ResourceIDNotFound`
     """
-    # The token used to reset password(in GET request)
-    # One hour timeout
-    req = request.get_json()
+    #req = request.get_json()
+    req = request.form
     email = req.get('email')
     if not email:
         raise BadJSONData
@@ -269,7 +318,7 @@ def user_reset_password():
             se.rollback()
             raise
 
-        return success_response
+        return render_template("user/confirmation_succ.html")
 
 
 @api_mod.route("/user/register", methods=["POST"])

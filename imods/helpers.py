@@ -96,3 +96,9 @@ def check_onetime_token(key, token, prefix=''):
     res = tk and tk == token
     app.cache.delete(cache_key)
     return res
+
+
+def detect_ios_by_useragent(ua):
+    reg = re.compile(r".*iphone os.*", re.IGNORECASE)
+    reg_ipad = re.compile(r".*ipad", re.IGNORECASE)
+    return reg.match(ua) or reg_ipad.match(ua)
