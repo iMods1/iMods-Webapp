@@ -30,3 +30,4 @@ sqlalchemy-schemadisplay==1.2
 stripe==1.19.1
 uWSGI==2.0.6
 wsgiref==0.1.2
+redis==2.10.3
