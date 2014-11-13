@@ -22,7 +22,6 @@ itsdangerous==0.24
 kombu==3.0.23
 pydot==1.0.2
 pyparsing==2.0.2
-python-apt==0.0.0
 pytz==2014.7
 requests==2.4.3
 six==1.7.3
