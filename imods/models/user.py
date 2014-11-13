@@ -26,7 +26,7 @@ class User(db.Model, JSONSerialize):
     author_identifier = db.Column(db.String(100), nullable=True)
     # Account status,e.g. registered, activated, suspended etc
     status = db.Column(db.Integer, nullable=False,
-                       default=AccountStatus.Registered)
+                       default=AccountStatus.PendingConfirmation)
     # The key for various encryption use
     # Account role/group for privilege checking
     role = db.Column(db.Integer, default=UserRole.User, nullable=False)
@@ -72,7 +72,7 @@ class User(db.Model, JSONSerialize):
                     description=self.fullname,
                     email=self.email
             )
-            
+
             with db_scoped_session() as se:
                 se.query(User).filter_by(uid=self.uid).update({"stripe_customer_token":stripe_customer_token.id})
                 se.commit()

@@ -1,5 +1,7 @@
 import os
 
+CONFIG_NAME = "PRODUCTION"
+
 # Abs path of current file
 basedir = os.environ.get('IMODS_DB_DIR') or '/var/db/imods.wunderkind.us'
 
@@ -19,6 +21,14 @@ DEFAULT_CATEGORIES = [
         'description': 'featured apps',
     },
 ]
+
+CACHE_CONFIG = {
+    'CACHE_TYPE': 'redis',
+    'CACHE_REDIS_HOST': '172.30.3.216',
+    'CACHE_REDIS_PORT': '6379'
+}
+
+TOKEN_TIMEOUT = 300
 
 UPLOAD_PATH = os.path.join(basedir, "deb")
 

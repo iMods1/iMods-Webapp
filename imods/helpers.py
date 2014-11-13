@@ -1,6 +1,9 @@
 from imods import db, app
+from werkzeug.security import generate_password_hash
 from contextlib import contextmanager
 from os import path
+import base64
+import time
 import re
 import os
 
@@ -71,3 +74,25 @@ def get_pkg_paths(pkg_name, pkg_ver):
         'icon_base_path': icon_base_path,
         'ss_base_path': ss_base_path
     }
+
+
+# Generate a one-time token used by a variety of functions
+def generate_onetime_token(key, prefix='', timeout=None):
+    cache_key = path.join('token', prefix, key)
+    res = app.cache.get(cache_key)
+    if res:
+        return res
+    raw = generate_password_hash(key+str(time.time()))
+    res = base64.urlsafe_b64encode(raw)
+    app.cache.set(cache_key,
+                  res,
+                  timeout or app.config.get('TOKEN_TIMEOUT') or 300)
+    return res
+
+
+def check_onetime_token(key, token, prefix=''):
+    cache_key = path.join('token', prefix, key)
+    tk = app.cache.get(cache_key)
+    res = tk and tk == token
+    app.cache.delete(cache_key)
+    return res
