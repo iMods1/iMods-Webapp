@@ -1,5 +1,7 @@
 import os
 
+CONFIG_NAME = "DEVELOPMENT"
+
 # Abs path of current file
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -19,6 +21,12 @@ DEFAULT_CATEGORIES = [
         'description': 'featured apps',
     },
 ]
+
+CACHE_CONFIG = {
+    'CACHE_TYPE': 'simple',
+}
+
+TOKEN_TIMEOUT = 300
 
 UPLOAD_PATH = os.path.join(basedir, "deb")
 

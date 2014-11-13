@@ -3,6 +3,7 @@
 """
 from flask import Flask
 from flask.ext.sqlalchemy import SQLAlchemy
+from flask.ext.cache import Cache
 import os
 
 app = Flask(__name__)
@@ -45,6 +46,14 @@ def init_folders():
                                file uploading will not work.")
 
 
+def init_cache():
+    if not app.config.get('CACHE_CONFIG'):
+        return
+    if getattr(app, 'cache', None):
+        return
+    app.cache = Cache(app, config=app.config['CACHE_CONFIG'])
+
+
 from imods.api.routes import api_mod
 from imods.admin.views import imods_admin
 app.register_blueprint(api_mod)
@@ -52,3 +61,4 @@ imods_admin.init_app(app)
 
 init_db()
 init_folders()
+init_cache()

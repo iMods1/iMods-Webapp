@@ -15,8 +15,8 @@ class UserRole:
 
 
 class AccountStatus:
-    Registered = 0
-    Activated = 1
+    PendingConfirmation = 100
+    Activated = 200
     Suspended = 1000
 
 

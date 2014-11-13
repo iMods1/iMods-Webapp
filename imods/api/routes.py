@@ -1,24 +1,27 @@
-from flask import request, session, Blueprint, json
+from flask import request, session, Blueprint, json, render_template, url_for, abort, redirect
 from werkzeug import check_password_hash, generate_password_hash
 from imods import app
-from imods.models.constants import BillingType
+from imods.models.constants import BillingType, AccountStatus
 from imods.models import User, Order, Item, Device, Category, BillingInfo
 from imods.models import UserRole, OrderStatus, Review, WishList
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
-from imods.helpers import db_scoped_session
+from imods.helpers import db_scoped_session, generate_onetime_token, check_onetime_token
+from imods.helpers import detect_ios_by_useragent
 from imods.api.exceptions import setup_api_exceptions
 from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
 from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
-from imods.api.exceptions import CategorySelfParent, BadJSONData
+from imods.api.exceptions import CategorySelfParent, BadJSONData, BadURLRequest
 from imods.api.exceptions import CategoryNameReserved, InternalException
-from imods.api.exceptions import ResourceUniqueError
+from imods.api.exceptions import ResourceUniqueError, InvalidToken
 from datetime import datetime
 import boto
+import boto.ses
 import os
 import operator
-import base64
+import urllib
+import urlparse
 
 
 api_mod = Blueprint("api_mods", __name__, url_prefix="/api")
@@ -61,6 +64,263 @@ def user_profile():
     return user.get_public()
 
 
+def send_confirmation_email(email):
+    # TODO: Put email sending in background, e.g. using celery
+    token = generate_onetime_token(email, 'user_register_email_confirm')
+    link_url = url_for('.user_confirm',
+                       _external=True,
+                       email=email,
+                       token=token)
+    link_text = 'Confirm your email.'
+    query = urllib.urlencode([('email', email),
+                              ('token', token)])
+    imods_link_url = urlparse.urlunsplit(['imods',
+                                          'user',
+                                          'confirm',
+                                          query,
+                                          ''])
+    html_body = render_template('email/confirmation.html',
+                                link_url=link_url,
+                                imods_link_url=imods_link_url,
+                                link_text=link_text)
+    ses = boto.ses.connect_to_region("us-east-1",
+                                     profile_name=app.config.get("BOTO_PROFILE")
+                                     )
+    ses.send_email("no-reply@imods.wunderkind.us",
+                   "iMods Registration Confirmation",
+                   html_body,
+                   [email],
+                   format='html')
+
+
+def send_reset_password_email(email):
+    token = generate_onetime_token(email, 'user_reset_password', 60*60*24)
+    #query = urllib.urlencode([('email', email),
+                              #('token', token)])
+    #imods_link_url = urlparse.urlunsplit(['imods',
+                                          #'user',
+                                          #'reset_password',
+                                          #query,
+                                          #''])
+    #imods_link_text = "Reset password"
+    link_url = url_for(".user_reset_password_client",
+                       _external=True,
+                       email=email,
+                       token=token)
+    link_text = "Reset password"
+    html_body = render_template('email/reset_password.html',
+                                link_url=link_url,
+                                link_text=link_text)
+    ses = boto.ses.connect_to_region("us-east-1",
+                                     profile_name=app.config.get("BOTO_PROFILE")
+                                     )
+    ses.send_email("no-reply@imods.wunderkind.us",
+                   "iMods Reset Password",
+                   html_body,
+                   [email],
+                   format='html')
+
+
+def send_password_changed_email_notification(email):
+    html_body = render_template('email/password_was_reset_notification.html')
+    ses = boto.ses.connect_to_region("us-east-1",
+                                     profile_name=app.config.get("BOTO_PROFILE")
+                                     )
+    ses.send_email("no-reply@imods.wunderkind.us",
+                   "Your iMods password has been reset",
+                   html_body,
+                   [email],
+                   format='html')
+
+
+@api_mod.route("/user/send_confirmation", methods=["POST"])
+@require_json()
+def user_send_confirmation():
+    """ Send a confirmation email. for development only!"""
+    if app.config.get('CONFIG_NAME') != "DEVELOPMENT":
+        abort(403)
+    req = request.get_json()
+    email = req.get('email')
+    if email is None:
+        raise BadJSONData
+
+    with db_scoped_session() as se:
+        user = se.query(User).filter_by(email=email).first()
+        if not user:
+            raise ResourceIDNotFound
+    try:
+        send_confirmation_email(req.get('email'))
+    except:
+        raise
+    return success_response
+
+
+@api_mod.route("/user/confirm")
+def user_confirm():
+    """
+    Confirm user email address.
+
+    *** Request ***
+
+    :queryparam string email: email address of the user
+    :queryparam string token: Access token
+
+    *** Response ***
+
+    :reqheader Content-Type: N/A
+    :resheader Content-Type: text/html
+    :status 200: no error :py:obj:`.success_response`
+    :status 401: failed to validate email.
+    """
+    email = request.args.get('email')
+    token = request.args.get('token')
+    if check_onetime_token(email, token, 'user_register_email_confirm'):
+        with db_scoped_session() as se:
+            try:
+                user = se.query(User).filter_by(email=email).first()
+                if not user:
+                    raise InternalException("User not found in database, but has been activated.")
+                user.status = AccountStatus.Activated
+                se.commit()
+            except:
+                se.rollback()
+                raise
+        return render_template('user/confirmation_succ.html')
+    else:
+        return render_template('user/confirmation_fail.html'), 401
+
+
+@api_mod.route("/user/request_reset_password")
+@require_json(request=False)
+def user_request_password():
+    """
+    Send a reset password link to user's email address.
+
+    *** Request ***
+    :queryparam string email: User email
+
+    *** Response ***
+
+    :reqheader Content-Type: N/A
+    :reqheader Content-Type: application/json
+    :status 200: no erro :py:obj:`.success_response`
+    :status 400: :py:exc:`.BadURLRequest`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
+    email = request.args.get('email')
+    # TODO: Add access token to limit the API usage
+    if not email:
+        raise BadURLRequest
+
+    with db_scoped_session() as se:
+        user = se.query(User).filter_by(email=email).first()
+        if not user:
+            raise ResourceIDNotFound
+
+    try:
+        send_reset_password_email(email)
+    except:
+        raise InternalException('Unable to send email.')
+
+    return success_response
+
+
+@api_mod.route("/user/reset_password_client")
+def user_reset_password_client():
+    """
+    Handle URl requests from user's email, it redirects to the custom
+    url since Gmail strips them all.
+
+    *** Request ***
+    :queryparam string email: user email
+    :queryparam string token: access token
+
+    *** Response ***
+
+    :status 301: Redirect to custom url
+    :status 404: Block desktop users
+    """
+    # Request from the client, use user-agent to detect whether it's
+    # from iOS or desktop
+    email = request.args.get("email").strip()
+    token = request.args.get("token").strip()
+    if len(email) == 0 or len(token) == 0:
+        abort(404)
+    return render_template("user/reset_password.html",
+                           post_url=url_for(".user_reset_password"),
+                            email=email,
+                            token=token)
+    user_agent = request.headers.get('User-Agent')
+    #if detect_ios_by_useragent(user_agent):
+        # Redirct to custom url
+        #email = request.args.get("email").strip()
+        #token = request.args.get("token").strip()
+        #if len(email) == 0 or len(token) == 0:
+            #abort(404)
+        #query = urllib.urlencode([('email', email),
+                                #('token', token)])
+        #imods_link_url = urlparse.urlunsplit(['imods',
+                                            #'user',
+                                            #'reset_password',
+                                            #query,
+                                            #''])
+        #print 'redirct:', imods_link_url
+        #return redirect(imods_link_url)
+    # Block desktop users
+
+
+@api_mod.route("/user/reset_password", methods=["POST"])
+#@require_json()
+def user_reset_password():
+    """
+    Reset user's password.
+
+    *** Request ***
+    :jsonparam string email: email address of the user
+    :jsonparam string token: access token
+    :jsonparam string new_password: new password
+
+    *** Response ***
+
+    :reqheader Content-Type: application/json
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exc:`.BadJSONData`
+    :status 403: :py:exc:`.InvalidToken`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    """
+    #req = request.get_json()
+    req = request.form
+    email = req.get('email')
+    if not email:
+        raise BadJSONData
+
+    with db_scoped_session() as se:
+        user = se.query(User).filter_by(email=email).first()
+        if not user:
+            raise ResourceIDNotFound
+
+        # Not a request, reset the password with new password
+        token = req.get('token')
+        newpwd = req.get('new_password')
+
+        if not (token and check_onetime_token(email, token, 'user_reset_password')):
+            raise InvalidToken
+
+        if not newpwd:
+            raise BadJSONData
+
+        try:
+            user.password = generate_password_hash(newpwd)
+            se.commit()
+            send_password_changed_email_notification(email)
+        except:
+            se.rollback()
+            raise
+
+        return render_template("user/confirmation_succ.html")
+
+
 @api_mod.route("/user/register", methods=["POST"])
 @require_json()
 def user_register():
@@ -101,8 +361,16 @@ def user_register():
                    private_key="privatekey", age=req["age"],
                    author_identifier="author_identifier")
     with db_scoped_session() as se:
-        se.add(newuser)
-        se.commit()
+        try:
+            se.add(newuser)
+            se.commit()
+        except:
+            se.rollback()
+        try:
+            if not app.config.get('TESTING'):
+                send_confirmation_email(req["email"])
+        except:
+            pass
         return newuser.get_public()
 
 
@@ -158,30 +426,6 @@ def user_logout():
     """
     if session.get('user') is not None:
         del session['user']
-    return success_response
-
-
-@api_mod.route("/user/reset_password/<email>")
-@require_json(request=False)
-def user_reset_password(email):
-    """
-    Reset user's password. This will send an email with a new password to user.
-    This always returns a 200 OK.
-
-    *** Request ***
-
-    :jsonparam email: user's email address
-
-    *** Response ***
-    :resheader Content-Type: application/json
-    :status 200: no error :py:obj:`.success_response`
-    """
-    user = User.query.filter_by(email=email)
-    if not user:
-        return success_response
-    newpwd = generate_password_hash(base64.b64decode(os.urandom(10)))
-    user.password = newpwd
-    # TODO: Send new password to user.
     return success_response
 
 
@@ -1778,7 +2022,7 @@ def package_get():
         # Verify user already purchased the item
         for item in items:
             # If the item is free, generate an order
-            if item.pkg_name not in od:
+            if item.pkg_name not in orders:
                 if item.price == 0.0:
                     with db_scoped_session() as se:
                         try:

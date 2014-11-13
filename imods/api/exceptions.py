@@ -88,6 +88,11 @@ class ResourceIDNotFound(APIException):
     message = 'Recource ID is not found'
 
 
+class InvalidToken(APIException):
+    status_code = 403
+    message = 'Token is not valid'
+
+
 class InsufficientPrivileges(APIException):
     status_code = 405
     message = 'Not authenticated to perform this operation.'
