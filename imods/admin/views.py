@@ -317,6 +317,7 @@ class PackageAssetsView(BaseView):
                     shutil.move(debTmpFile, pkg_local_cache_path)
 
                     pkg_overrides = [(item.pkg_name, "itemid", item.iid),
+                                     (item.pkg_name, "itemname", item.display_name),
                                      (item.pkg_name, "filename", "null")]
 
                     # Check if it's a tweak
