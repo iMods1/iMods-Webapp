@@ -7,8 +7,8 @@ from imods.models import UserRole, OrderStatus, Review, WishList
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session, generate_onetime_token, check_onetime_token
-from imods.helpers import detect_ios_by_useragent
-from imods.api.exceptions import setup_api_exceptions
+#from imods.helpers import detect_ios_by_useragent
+from imods.api.exceptions import setup_api_exceptions, UserNotLoggedIn
 from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
 from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
@@ -1912,7 +1912,6 @@ def package_index():
             }
 
 @api_mod.route("/package/get", methods=["POST"])
-@require_login
 @require_json()
 def package_get():
     """
@@ -1941,6 +1940,8 @@ def package_get():
     :jsonparam string item.assets.icons.name: Filename of icon image.
     :jsonparam string item.assets.screenshots.url: URL of item screenshot.
     :jsonparam string item.assets.screenshots.name: Filename of item screenshot.
+    :jsonparam string item.assets.videos.name: video id name
+    :jsonparam string item.assets.videos.youtueb_id: youtueb video id
 
     Example:
     [
@@ -1961,6 +1962,12 @@ def package_get():
                 {
                     "url":"https://imods.com/pkg/v1/sshot1.png",
                     "name":"sshot1.png"
+                }
+            ],
+            "videos": [
+                {
+                    "name": "youtube-WOIzQshmexc",
+                    "youtube_id": "WOIzQshmexc"
                 }
             ]
         }
@@ -2006,6 +2013,8 @@ def package_get():
         else:
             raise InternalException("This shouldn't happend")
 
+        if session.get('user') is None and res_type in ["deb", "all"]:
+            raise UserNotLoggedIn
         uid = session['user']['uid']
         user = ses.query(User).get(uid)
         if not user:
@@ -2051,6 +2060,7 @@ def package_get():
             assets_path = item.pkg_assets_path
             icons_path = os.path.join(assets_path, 'icons')
             screenshots_path = os.path.join(assets_path, 'screenshots')
+            videos_path = os.path.join(assets_path, "videos")
 
             expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
 
@@ -2058,15 +2068,17 @@ def package_get():
             assets = {}
             icons = []
             screenshots = []
+            videos = []
             res_item = {
                 'pkg_name': item.pkg_name,
                 'pkg_ver': item.pkg_version,
-                'deb_sha1_checksum': item.pkg_signature,
+                'deb_sha1_checksum': "",
                 'deb_url': [],
                 'url_expires_in': expire,
                 'assets': {
                     'icons': [],
-                    'screenshots': []
+                    'screenshots': [],
+                    'videos': []
                 }
             }
 
@@ -2092,6 +2104,19 @@ def package_get():
 
                 assets['screenshots'] = screenshots
 
+                videos_list = assets_bucket.list(videos_path)
+                for video in videos_list:
+                    if video.name.endswith('/'):
+                        continue
+                    video_name = os.path.basename(video.name)
+                    if video_name.startswith('youtube'):
+                        youtube_id = video_name.split('-')[1]
+                    else:
+                        youtube_id = ""
+                    videos.append(dict(name=video_name, youtube_id=youtube_id, url=""))
+
+                assets['videos'] = videos
+
             res_item['assets'] = assets
 
             pkg_bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
@@ -2103,6 +2128,7 @@ def package_get():
                         "Item %s(%d) is not purchased." % (item.pkg_name, item.iid))
                 deb_url = deb_key.generate_url(expires_in=expire)
                 res_item['deb_url'] = deb_url
+                res_item['deb_sha1_checksum'] = item.pkg_signature
 
             result.append(res_item)
 
