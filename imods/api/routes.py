@@ -7,8 +7,8 @@ from imods.models import UserRole, OrderStatus, Review, WishList
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session, generate_onetime_token, check_onetime_token
-from imods.helpers import detect_ios_by_useragent
-from imods.api.exceptions import setup_api_exceptions
+#from imods.helpers import detect_ios_by_useragent
+from imods.api.exceptions import setup_api_exceptions, UserNotLoggedIn
 from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
 from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
@@ -1912,7 +1912,6 @@ def package_index():
             }
 
 @api_mod.route("/package/get", methods=["POST"])
-@require_login
 @require_json()
 def package_get():
     """
@@ -2006,6 +2005,8 @@ def package_get():
         else:
             raise InternalException("This shouldn't happend")
 
+        if session.get('user') is None and res_type in ["deb", "all"]:
+            raise UserNotLoggedIn
         uid = session['user']['uid']
         user = ses.query(User).get(uid)
         if not user:
