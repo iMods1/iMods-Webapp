@@ -191,6 +191,7 @@ class PackageAssetsUploadForm(ExtForm):
     item_id = wtf.fields.SelectField(u"Item", coerce=int)
     app_icon = wtf.fields.FileField(u"App Icon")
     screenshot = wtf.fields.FileField(u"Screenshot")
+    youtube_video_id = wtf.fields.TextField(u"Youtube Video Identifier")
     package_file = wtf.fields.FileField(u'Package file(deb)')
 
     def validate_imgfile(self, field):
@@ -363,6 +364,17 @@ class PackageAssetsView(BaseView):
                     with open(sshot_tmpfile, "wb") as tmp:
                         tmp.write(screenshot.read())
                     upload_to_s3.delay(assets_bucket, sshot_s3_path, sshot_tmpfile, True)
+
+                    # Upload youtube video id
+                    youtube_id_path = path.join(base_path, "videos")
+                    youtube_s3_filename = "youtube-%s" % form.youtube_video_id.data
+                    youtube_id_s3_path = path.join(youtube_id_path,
+                                                   youtube_s3_filename)
+                    _, youtube_id_tmpfile = mkstemp()
+                    with open(youtube_id_tmpfile, "wb") as tmp:
+                        tmp.write(form.youtube_video_id.data)
+                    upload_to_s3.delay(assets_bucket, youtube_id_s3_path, youtube_id_tmpfile, True)
+
                 except Exception as e:
                     s.rollback()
                     raise e

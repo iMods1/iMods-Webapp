@@ -58,6 +58,9 @@ main(){
                     uwsgi --ini $CONFIG:$TARGET
             esac
             ;;
+        start-celery)
+            celery -A imods.celery.celery worker -l info --autoreload
+            ;;
         reload)
             if [ ! -r /tmp/uwsgi_imods.pid ];then
                 echo "uwsgi not started"
