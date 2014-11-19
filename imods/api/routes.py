@@ -2109,7 +2109,7 @@ def package_get():
                         continue
                     video_name = os.path.basename(video.name)
                     if video_name.startswith('youtube'):
-                        youtube_id = video_name.split('-')[1]
+                        youtube_id = video_name.partition('-')[2]
                     else:
                         youtube_id = ""
                     videos.append(dict(name=video_name, youtube_id=youtube_id, url=""))
