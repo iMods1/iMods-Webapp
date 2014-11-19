@@ -875,7 +875,7 @@ def billing_add():
             billing.get_or_create_stripe_card_obj(cc_cvv)
             se.commit()
         except Exception as e:
-            se.roll_back()
+            se.rollback()
             raise CardCreationFailed(str(e))
         return billing.get_public()
 
