@@ -1912,6 +1912,7 @@ def package_index():
             }
 
 @api_mod.route("/package/get", methods=["POST"])
+@require_login
 @require_json()
 def package_get():
     """
@@ -2013,8 +2014,6 @@ def package_get():
         else:
             raise InternalException("This shouldn't happend")
 
-        if session.get('user') is None and res_type in ["deb", "all"]:
-            raise UserNotLoggedIn
         uid = session['user']['uid']
         user = ses.query(User).get(uid)
         if not user:
