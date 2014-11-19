@@ -98,6 +98,11 @@ class InsufficientPrivileges(APIException):
     message = 'Not authenticated to perform this operation.'
 
 
+class CardCreationFailed(APIException):
+    status_code = 400
+    message = 'There was a problem to add your credit card.'
+
+
 class CategoryNotEmpty(APIException):
     status_code = 409
     message = 'Category is not empty:The category to delete has one or more \
