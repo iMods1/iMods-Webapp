@@ -1,4 +1,5 @@
-from flask import request, session, Blueprint, json, render_template, url_for, abort, redirect
+from flask import request, session, Blueprint, json, render_template
+from flask import url_for, abort
 from werkzeug import check_password_hash, generate_password_hash
 from imods import app
 from imods.models.constants import BillingType, AccountStatus
@@ -8,13 +9,13 @@ from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session, generate_onetime_token, check_onetime_token
 #from imods.helpers import detect_ios_by_useragent
-from imods.api.exceptions import setup_api_exceptions, UserNotLoggedIn
+from imods.api.exceptions import setup_api_exceptions
 from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
 from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
 from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
 from imods.api.exceptions import CategorySelfParent, BadJSONData, BadURLRequest
 from imods.api.exceptions import CategoryNameReserved, InternalException
-from imods.api.exceptions import ResourceUniqueError, InvalidToken
+from imods.api.exceptions import ResourceUniqueError, InvalidToken, CardCreationFailed
 from datetime import datetime
 import boto
 import boto.ses
@@ -250,7 +251,7 @@ def user_reset_password_client():
                            post_url=url_for(".user_reset_password"),
                             email=email,
                             token=token)
-    user_agent = request.headers.get('User-Agent')
+    #user_agent = request.headers.get('User-Agent')
     #if detect_ios_by_useragent(user_agent):
         # Redirct to custom url
         #email = request.args.get("email").strip()
@@ -843,6 +844,7 @@ def billing_add():
     :reqheader Content-Type: application/json
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exc:`.CardCreationFailed`
     :status 403: :py:exc:`.UserNotLoggedIn`
     """
     req = request.get_json()
@@ -869,8 +871,12 @@ def billing_add():
                           cc_expr=cc_expr)
     with db_scoped_session() as se:
         se.add(billing)
-        se.commit()
-        billing.get_or_create_stripe_card_obj(cc_cvv)
+        try:
+            billing.get_or_create_stripe_card_obj(cc_cvv)
+            se.commit()
+        except Exception as e:
+            se.roll_back()
+            raise CardCreationFailed(str(e))
         return billing.get_public()
 
 
