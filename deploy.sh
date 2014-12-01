@@ -1,7 +1,7 @@
 #!/bin/bash
 
 usage(){
-    echo "usage:$0 [package [output_path]|unpackage <file>|clean|start [dev|deploy] [ini file]|reload|stop]"
+    echo "usage:$0 [package [output_path]|unpackage <file>|clean|start [dev|deploy] [ini file]|reload|stop]|start-celery"
 }
 
 check_deploy_env(){

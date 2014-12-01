@@ -1,6 +1,6 @@
 from imods import db, app
 from imods.models import User, BillingInfo, Category, Device, Item, Order
-from imods.models import UserRole, BillingType, OrderStatus, Review
+from imods.models import UserRole, BillingType, OrderStatus, Review, Banner
 from imods.helpers import db_scoped_session, generate_bucket_key, detect_tweak
 from imods.tasks.dpkg import dpkg_update_index, upload_to_s3
 from flask.ext.admin import Admin, expose, helpers, AdminIndexView, BaseView
@@ -130,6 +130,14 @@ class ReviewView(ModelView):
         super(ReviewView, self).__init__(Review, session, **kwargs)
 
 
+class BannerView(ModelView):
+    def is_accessible(self):
+        return session.get('user') is not None
+
+    def __init__(self, session, **kwargs):
+        super(BannerView, self).__init__(Banner, session, **kwargs)
+
+
 class LoginForm(wtf.form.Form):
     email = wtf.fields.TextField(validators=[wtf.validators.required(),
                                              wtf.validators.Email()])
@@ -193,6 +201,7 @@ class PackageAssetsUploadForm(ExtForm):
     screenshot = wtf.fields.FileField(u"Screenshot")
     youtube_video_id = wtf.fields.TextField(u"Youtube Video Identifier")
     package_file = wtf.fields.FileField(u'Package file(deb)')
+    banner_image = wtf.fields.FileField(u'Banner Image')
 
     def validate_imgfile(self, field):
         if field.data:
@@ -221,6 +230,9 @@ class PackageAssetsUploadForm(ExtForm):
     def validate_screenshot(self, field):
         return self.validate_imgfile(field)
 
+    def validate_banner_image(self, field):
+        return self.validate_imgfile(field)
+
 
 class PackageAssetsView(BaseView):
     template_name = u"package_assets.html"
@@ -244,10 +256,12 @@ class PackageAssetsView(BaseView):
                 # Get file data from request.files
                 app_icon = request.files["app_icon"]
                 screenshot = request.files["screenshot"]
-                # Get pkg_assets_path
-                item = s.query(Item).get(form.item_id.data)
                 # Get package file
                 package_file = request.files["package_file"]
+                # Get banner image file
+                banner_img_file = request.files["banner_image"]
+                # Get pkg_assets_path
+                item = s.query(Item).get(form.item_id.data)
 
                 _, debTmpFile = mkstemp()
                 with open(debTmpFile, "wb") as local_deb_file:
@@ -375,6 +389,25 @@ class PackageAssetsView(BaseView):
                         tmp.write(form.youtube_video_id.data)
                     upload_to_s3.delay(assets_bucket, youtube_id_s3_path, youtube_id_tmpfile, True)
 
+
+                    # Upload banner image
+                    banner_img_path = path.join(base_path, "banners")
+                    banner_img_s3_path = generate_bucket_key(banner_img_path,
+                                                             "banner_image",
+                                                             banner_img_file.filename)
+
+                    _, banner_img_tmpfile = mkstemp()
+                    with open(banner_img_tmpfile, "wb") as tmp:
+                        tmp.write(banner_img_file.read())
+                    # Add banner item to the database
+                    with db_scoped_session() as ses:
+                        banner = ses.query(Banner).filter_by(item_id = item.iid).first()
+                        if banner is None:
+                            banner = Banner(item_id=item.iid)
+                            ses.add(banner)
+                            ses.commit()
+                    upload_to_s3.delay(assets_bucket, banner_img_s3_path, banner_img_tmpfile, True)
+
                 except Exception as e:
                     s.rollback()
                     raise e
@@ -397,6 +430,7 @@ imods_admin.add_view(DeviceView(db.session))
 imods_admin.add_view(BillingView(db.session))
 imods_admin.add_view(CategoryView(db.session))
 imods_admin.add_view(ItemView(db.session))
+imods_admin.add_view(BannerView(db.session))
 imods_admin.add_view(OrderView(db.session))
 imods_admin.add_view(ReviewView(db.session))
 imods_admin.add_view(PackageAssetsView(name="Manage Assets"))

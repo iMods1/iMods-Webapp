@@ -15,7 +15,7 @@ import stripe
 class User(db.Model, JSONSerialize):
     __tablename__ = 'USER'
     __public__ = ("uid", "email", "fullname", "age", "role",
-                  "author_identifier")
+                  "author_identifier", "user_assets_path")
 
     uid = db.Column(db.Integer, nullable=False,
                     primary_key=True, autoincrement=True)
@@ -31,6 +31,9 @@ class User(db.Model, JSONSerialize):
     # Account role/group for privilege checking
     role = db.Column(db.Integer, default=UserRole.User, nullable=False)
     private_key = db.Column(db.String(), nullable=False)
+
+    # User assets, profile images etc.
+    user_assets_path = db.Column(db.String(), nullable=True)
 
     # The Stripe customer token for this user object
     stripe_customer_token = db.Column(db.String(100), nullable=True)
@@ -66,7 +69,7 @@ class User(db.Model, JSONSerialize):
         stripe.api_key = app.config.get("STRIPE_API_KEY")
         try:
             return stripe.Customer.retrieve(self.stripe_customer_token)
-        except Exception as e:
+        except Exception:
             # Stripe customer not found, create new customer
             stripe_customer_token = stripe.Customer.create(
                     description=self.fullname,

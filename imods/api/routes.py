@@ -4,7 +4,7 @@ from werkzeug import check_password_hash, generate_password_hash
 from imods import app
 from imods.models.constants import BillingType, AccountStatus
 from imods.models import User, Order, Item, Device, Category, BillingInfo
-from imods.models import UserRole, OrderStatus, Review, WishList
+from imods.models import UserRole, OrderStatus, Review, WishList, Banner
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
 from imods.helpers import db_scoped_session, generate_onetime_token, check_onetime_token
@@ -1913,9 +1913,106 @@ def package_index():
     expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
 
     url = pkg_index.generate_url(expires_in=expire)
-    return {'url': url,
+    return {
+            'url': url,
             'url_expires_in': expire
             }
+
+
+# TODO: Move these reusable functions to a separate file
+def get_item_assets(item, res_type):
+    if item is None:
+        return
+
+    cached = app.cache.get("item/%d/assets/%s" % (item.iid, res_type))
+    # Return cached data if available, note that "deb" type is an exception
+    if cached and res_type != "deb":
+        return cached
+
+    # Connect to s3 buckets
+    s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
+    assets_bucket = s3.get_bucket(app.config["S3_ASSETS_BUCKET"])
+
+    # Get paths
+    assets_path = item.pkg_assets_path
+
+    expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
+
+    if res_type == "icons":
+        # Get icons
+        icons = []
+        icons_path = os.path.join(assets_path, 'icons')
+        icons_list = assets_bucket.list(icons_path)
+        for icon in icons_list:
+            if icon.name.endswith('/'):
+                # Skip subfolders
+                continue
+            icon_url = icon.generate_url(expire)
+            icon_name = os.path.basename(icon.name)
+            icons.append(dict(name=icon_name, url=icon_url))
+
+        result = icons
+
+
+    if res_type == "screenshots":
+        # Get screenshots
+        screenshots = []
+        screenshots_path = os.path.join(assets_path, 'screenshots')
+        ss_list = assets_bucket.list(screenshots_path)
+        for sshot in ss_list:
+            if sshot.name.endswith('/'):
+                continue
+            sshot_url = sshot.generate_url(expire)
+            sshot_name = os.path.basename(sshot.name)
+            screenshots.append(dict(name=sshot_name, url=sshot_url))
+
+        result = screenshots
+
+    if res_type == "videos":
+        # Get videos
+        videos = []
+        videos_path = os.path.join(assets_path, "videos")
+        videos_list = assets_bucket.list(videos_path)
+        for video in videos_list:
+            if video.name.endswith('/'):
+                continue
+            video_name = os.path.basename(video.name)
+            if video_name.startswith('youtube'):
+                youtube_id = video_name.partition('-')[2]
+            else:
+                youtube_id = ""
+            videos.append(dict(name=video_name, youtube_id=youtube_id, url=""))
+
+        result = videos
+
+    if res_type == "banners":
+        # Get banner images
+        banners = []
+        banner_img_path = os.path.join(assets_path, "banners")
+        banner_imgs = assets_bucket.list(banner_img_path)
+        for banner in banner_imgs:
+            if banner.name.endswith('/'):
+                continue
+            banner_img_filename = os.path.basename(banner.name)
+            banner_img_url = banner.generate_url(expire)
+            banners.append(dict(name=banner_img_filename, url=banner_img_url))
+
+        result = banners
+
+    if res_type == "deb":
+        pkg_bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
+        deb_key = pkg_bucket.get_key(item.pkg_path)
+        deb_url = deb_key.generate_url(expires_in=expire)
+        deb = dict(deb_url=deb_url, deb_sha1_checksum=item.pkg_signature)
+        result = deb
+
+    if result is None:
+        # assets type not found
+        raise ResourceIDNotFound
+
+    app.cache.set("item/%d/assets/%s" % (item.iid, res_type), result, expire)
+    return result
+
 
 @api_mod.route("/package/get", methods=["POST"])
 @require_login
@@ -1949,6 +2046,8 @@ def package_get():
     :jsonparam string item.assets.screenshots.name: Filename of item screenshot.
     :jsonparam string item.assets.videos.name: video id name
     :jsonparam string item.assets.videos.youtueb_id: youtueb video id
+    :jsonparam string item.assets.banners.name: banner image filename
+    :jsonparam string item.assets.banners.url: url of banner images
 
     Example:
     [
@@ -1975,6 +2074,12 @@ def package_get():
                 {
                     "name": "youtube-WOIzQshmexc",
                     "youtube_id": "WOIzQshmexc"
+                }
+            ],
+            "banners": [
+                {
+                    "name": "banner1.png",
+                    "url": "https://imods.com/pkg/v1/banner.png"
                 }
             ]
         }
@@ -2033,11 +2138,12 @@ def package_get():
             orders[od.pkg_name] = True
 
         result = []
+
         # Verify user already purchased the item
         for item in items:
             # If the item is free, generate an order
-            if item.pkg_name not in orders:
-                if item.price == 0.0:
+            if res_type in ("deb", "all") and item.pkg_name not in orders:
+                if abs(item.price) < 0.01:
                     with db_scoped_session() as se:
                         try:
                             total_charge = 1 * item.price * 100
@@ -2057,84 +2163,66 @@ def package_get():
                     raise InsufficientPrivileges("Package '%s' need to be purchased before downloading"
                                                  % item.pkg_name)
 
-            # Connect to s3 buckets
-            s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
-            assets_bucket = s3.get_bucket(app.config["S3_ASSETS_BUCKET"])
-
-            # Get paths
-            assets_path = item.pkg_assets_path
-            icons_path = os.path.join(assets_path, 'icons')
-            screenshots_path = os.path.join(assets_path, 'screenshots')
-            videos_path = os.path.join(assets_path, "videos")
-
-            expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
-
-            # Init result containers
-            assets = {}
-            icons = []
-            screenshots = []
-            videos = []
             res_item = {
                 'pkg_name': item.pkg_name,
                 'pkg_ver': item.pkg_version,
                 'deb_sha1_checksum': "",
                 'deb_url': [],
-                'url_expires_in': expire,
+                'url_expires_in': app.config["DOWNLOAD_URL_EXPIRES_IN"],
                 'assets': {
-                    'icons': [],
-                    'screenshots': [],
-                    'videos': []
+                    'icons': get_item_assets(item, "icons"),
+                    'screenshots': get_item_assets(item, "screenshots"),
+                    'videos': get_item_assets(item, "videos"),
+                    'banners': get_item_assets(item, "banners")
                 }
             }
 
-            if res_type in ("assets", "all"):
-                icons_list = assets_bucket.list(icons_path)
-                for icon in icons_list:
-                    if icon.name.endswith('/'):
-                        # Skip subfolders
-                        continue
-                    icon_url = icon.generate_url(expire)
-                    icon_name = os.path.basename(icon.name)
-                    icons.append(dict(name=icon_name, url=icon_url))
-
-                assets['icons'] = icons
-
-                ss_list = assets_bucket.list(screenshots_path)
-                for sshot in ss_list:
-                    if sshot.name.endswith('/'):
-                        continue
-                    sshot_url = sshot.generate_url(expire)
-                    sshot_name = os.path.basename(sshot.name)
-                    screenshots.append(dict(name=sshot_name, url=sshot_url))
-
-                assets['screenshots'] = screenshots
-
-                videos_list = assets_bucket.list(videos_path)
-                for video in videos_list:
-                    if video.name.endswith('/'):
-                        continue
-                    video_name = os.path.basename(video.name)
-                    if video_name.startswith('youtube'):
-                        youtube_id = video_name.partition('-')[2]
-                    else:
-                        youtube_id = ""
-                    videos.append(dict(name=video_name, youtube_id=youtube_id, url=""))
-
-                assets['videos'] = videos
-
-            res_item['assets'] = assets
-
-            pkg_bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
-            deb_key = pkg_bucket.get_key(item.pkg_path)
             if res_type in ("deb", "all"):
-                # Verify the item is available to the user
-                if orders.get(item.pkg_name) is None:
-                    raise InsufficientPrivileges(
-                        "Item %s(%d) is not purchased." % (item.pkg_name, item.iid))
-                deb_url = deb_key.generate_url(expires_in=expire)
-                res_item['deb_url'] = deb_url
-                res_item['deb_sha1_checksum'] = item.pkg_signature
+                item_deb = get_item_assets(item, "deb")
+                res_item["deb_sha1_checksum"] = item_deb["deb_sha1_checksum"]
+                res_item["deb_url"] = item_deb["deb_url"]
 
             result.append(res_item)
 
+        return result
+
+
+@api_mod.route("/banner/list")
+@require_json(request=False)
+def banner_list():
+    """ Get all banner images and items information.
+
+        *** Request ***
+        :queryparam int item_id: item id of the banner item
+
+        *** Response ***
+        The response is a json array. Each element is a dictionary which contains banner information.
+        :jsonparam int banner.banner_id: the indentifier of the banner image
+        :jsonparam int banner.item_id: the identifier of the associated item of the banner image.
+        :jsonparam dict banner.item: the item data. See `item_list`
+        :jsonparam string banner.banner_imgs.name: image filename without extension.
+        :jsonparam string banner.banner_imgs.url: url of the image
+
+        :status 200: :py:obj:`.success_response`
+        :status 404: :py:exc:`.ResourceIDNotFound`
+        :status 500: :py:exc:`.InternalException`
+    """
+    item_id = request.args.get('item_id')
+    with db_scoped_session() as ses:
+        banners = []
+        if item_id:
+            item = ses.query(Item).get(item_id)
+            if item is None:
+                raise ResourceIDNotFound
+            banners = [ses.query(Banner).filter(item_id == item_id)]
+        else:
+            banners = ses.query(Banner).all()
+
+        result = []
+        for banner in banners:
+            banner_item = dict(banner_id=banner.banner_id,
+                               item_id=banner.item_id,
+                               item=banner.item.get_public(),
+                               banner_imgs=get_item_assets(banner.item, "banners"))
+            result.append(banner_item)
         return result
