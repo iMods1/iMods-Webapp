@@ -6,4 +6,5 @@ from .category import Category
 from .billing_info import BillingInfo
 from .review import Review
 from .wishlist import WishList
+from .banner import Banner
 from .constants import *

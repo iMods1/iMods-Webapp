@@ -17,7 +17,55 @@ ADMINS = [
 
 DEFAULT_CATEGORIES = [
     {
-        'name': 'featured',
+        'name': 'Featured',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Tweaks',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Themes',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Free',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Paid',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Education',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Productivity',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Entertainment',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Games',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Business',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Aesthetics',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Functionality',
+        'description': 'featured apps',
+    },
+    {
+        'name': 'Performance',
         'description': 'featured apps',
     },
 ]
