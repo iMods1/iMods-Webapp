@@ -54,6 +54,9 @@ def user_profile():
     :jsonparam int age: age of the user, used for content access
     :jsonparam string author_identifier: identifier string for content authors
 
+    :queryparam string img: request profile image url
+    :jsonparam string profile_image_url: the url of user's profile image
+
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
     :status 404: :py:exc:`.ResourceIDNotFound`
@@ -62,6 +65,14 @@ def user_profile():
     user = User.query.get(session['user']['uid'])
     if not user:
         raise ResourceIDNotFound()
+    if request.args.get('img'):
+        s3_key = app.s3_assets_bucket.get_key(user.profile_image_s3_keypath)
+        print(s3_key)
+        if s3_key:
+            url = s3_key.generate_url(app.config["DOWNLOAD_URL_EXPIRES_IN"])
+        else:
+            url = None
+        return dict(profile_image_url=url)
     return user.get_public()
 
 

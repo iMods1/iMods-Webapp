@@ -15,7 +15,7 @@ import stripe
 class User(db.Model, JSONSerialize):
     __tablename__ = 'USER'
     __public__ = ("uid", "email", "fullname", "age", "role",
-                  "author_identifier", "user_assets_path")
+                  "author_identifier")
 
     uid = db.Column(db.Integer, nullable=False,
                     primary_key=True, autoincrement=True)
@@ -32,8 +32,8 @@ class User(db.Model, JSONSerialize):
     role = db.Column(db.Integer, default=UserRole.User, nullable=False)
     private_key = db.Column(db.String(), nullable=False)
 
-    # User assets, profile images etc.
-    user_assets_path = db.Column(db.String(), nullable=True)
+    # User profile image keypath
+    profile_image_s3_keypath = db.Column(db.String(), nullable=True)
 
     # The Stripe customer token for this user object
     stripe_customer_token = db.Column(db.String(100), nullable=True)
