@@ -61,9 +61,13 @@ def dpkg_scan(repo_path, index_file, extra_overrides_file):
     return True
 
 
+# TODO: Move s3 related task functions to imods.tasks.s3
 @celery.task()
 def upload_to_s3(bucket_name, key_path, local_file, clean=False):
-    logging.info("Uploading %s to %s//%s", local_file, bucket_name, key_path)
+    logging.info("Uploading %s to S3 %s::%s", local_file, bucket_name, key_path)
+    # NOTE: the task will be running in another process or remote host, the app.s3_conn and
+    # app.s3_assets_bucket may not be available, so here we manually connect to
+    # S3 rather than reusing connection pool.
     s3 = boto.connect_s3(
         profile_name=app.config.get("BOTO_PROFILE"))
     # NOTE: Turn off bucket validation to speed up,
@@ -80,6 +84,21 @@ def upload_to_s3(bucket_name, key_path, local_file, clean=False):
     # Remove tmp file
     if clean:
         os.unlink(local_file)
+
+
+@celery.task()
+def delete_from_s3(bucket_name, key_path):
+    logging.info("Delete file from S3 %s::%s" % (bucket_name, key_path))
+    # app.s3_assets_bucket may not be available.
+    # NOTE: the task will be running in another process or remote host, the app.s3_conn and
+    # app.s3_assets_bucket may not be available, so here we manually connect to
+    # S3 rather than reusing connection pool.
+    s3 = boto.connect_s3(profile_name=app.config["BOTO_PROFILE"])
+    bucket = s3.get_bucket(bucket_name)
+    s3_file = bucket.get_key(key_path)
+    if s3_file is None:
+        return
+    s3_file.delete()
 
 
 @celery.task()

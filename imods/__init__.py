@@ -4,6 +4,7 @@
 from flask import Flask
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.cache import Cache
+import boto
 import os
 
 app = Flask(__name__)
@@ -38,11 +39,11 @@ def drop_db(db):
 
 def init_folders():
     # Create upload folder if not exits
-    if not os.path.exists(app.config["UPLOAD_PATH"]):
+    if not os.path.exists(app.config["DEB_UPLOAD_PATH"]):
         try:
-            os.makedirs(app.config["UPLOAD_PATH"])
+            os.makedirs(app.config["DEB_UPLOAD_PATH"])
         except:
-            app.logger.warning("Failed to create upload folder %s,\
+            app.logger.warning("Failed to create deb upload folder %s,\
                                file uploading will not work.")
 
 
@@ -53,6 +54,11 @@ def init_cache():
         return
     app.cache = Cache(app, config=app.config['CACHE_CONFIG'])
 
+def init_s3():
+    app.s3_conn = boto.connect_s3(profile_name=app.config["BOTO_PROFILE"])
+    app.s3_assets_bucket = app.s3_conn.get_bucket(app.config["S3_ASSETS_BUCKET"])
+    app.s3_pkg_bucket = app.s3_conn.get_bucket(app.config["S3_PKG_BUCKET"])
+
 
 from imods.api.routes import api_mod
 from imods.admin.views import imods_admin
@@ -62,3 +68,4 @@ imods_admin.init_app(app)
 init_db()
 init_folders()
 init_cache()
+init_s3()

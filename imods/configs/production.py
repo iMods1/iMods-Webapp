@@ -78,9 +78,14 @@ CACHE_CONFIG = {
 
 TOKEN_TIMEOUT = 300
 
-UPLOAD_PATH = os.path.join(basedir, "deb")
+DEB_UPLOAD_PATH = os.path.join(basedir, "deb")
 
 CELERY_BROKER_URL = "amqp://imods:7ujm6yhn5tgb4rfv@localhost/imods"
+# pickle is not safe, json takes more memory but should be ok if we don't pass
+# large objects to tasks
+CELERY_ACCEPT_CONTENT = ['json', 'msgpack', 'yaml']
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = 'json'
 
 SECRET_KEY = 'h\xcf\x08MW\x8d"\xde\xe5\xc1V\'\xa8(\x96\x910v\x14\x12#\xa1\x91K'
 
@@ -97,6 +102,7 @@ BOTO_PROFILE = 'imods_production'
 
 S3_ASSETS_BUCKET = 'imods'
 S3_PKG_BUCKET = 'imods_package'
+S3_MEDIA_BASE_PATH = 'static/media'
 
 PKG_INDEX_FILE_NAME = "Packages.gz"
 

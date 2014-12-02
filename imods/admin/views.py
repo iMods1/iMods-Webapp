@@ -16,6 +16,7 @@ import os
 from tempfile import mkstemp
 import shutil
 import hashlib
+from .fields import S3ImageUploadField
 
 
 class UserView(ModelView):
@@ -44,6 +45,24 @@ class UserView(ModelView):
         form_class.new_password = wtf.PasswordField('New Password',
                                                     validators=validators)
         form_class.password = wtf.HiddenField()
+
+        form_class.profile_image_filename = wtf.HiddenField()
+
+        def validate_imgfile(self, field):
+            if field.data:
+                filename = field.data.name.lower()
+
+                ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
+                ext = filename.rsplit('.', 1)
+                if not ('.' in filename and ext in ALLOWED_EXTENSIONS):
+                    raise wtf.validators.ValidationError(
+                        'Wrong Filetype, you can upload only png,jpg,jpeg files')
+
+        form_class.profile_image_s3_keypath = S3ImageUploadField(
+            s3_bucket=app.config["S3_ASSETS_BUCKET"],
+            s3_keypath_gen=None,
+            label=u'Profile image',
+            base_path=app.config["S3_MEDIA_BASE_PATH"])
         return form_class
 
     def on_model_change(self, form, model, is_created):
@@ -51,6 +70,7 @@ class UserView(ModelView):
             model.password = generate_password_hash(form.password.data)
         else:
             model.new_password = generate_password_hash(form.new_password.data)
+            model.password = model.new_password
 
     def is_accessible(self):
         return session.get('user') is not None
@@ -153,7 +173,7 @@ class LoginForm(wtf.form.Form):
 
         if user.role != UserRole.SiteAdmin:
             raise wtf.validators.ValidationError(
-                "You don't have required permission to access this page.")
+                "You don't have the required permission to access this page.")
 
         user_session_dict = {
             'fullname': user.fullname,
@@ -319,7 +339,7 @@ class PackageAssetsView(BaseView):
 
 
                     pkg_local_cache_path = path.join(
-                        app.config["UPLOAD_PATH"],
+                        app.config["DEB_UPLOAD_PATH"],
                         pkg_s3_key_path)
 
                     # Local package path
@@ -349,11 +369,11 @@ class PackageAssetsView(BaseView):
                     upload_to_s3.delay(pkg_bucket,
                                        pkg_s3_key_path,
                                        pkg_local_cache_path)
-                    pkg_index_file = path.join(app.config["UPLOAD_PATH"],
+                    pkg_index_file = path.join(app.config["DEB_UPLOAD_PATH"],
                                                app.config["PKG_INDEX_FILE_NAME"]
                                                )
                     # Update and upload package index
-                    dpkg_update_index.delay(app.config["UPLOAD_PATH"],
+                    dpkg_update_index.delay(app.config["DEB_UPLOAD_PATH"],
                                             pkg_bucket,
                                             index_s3_key_path,
                                             pkg_index_file,
