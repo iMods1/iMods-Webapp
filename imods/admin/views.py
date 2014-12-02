@@ -69,8 +69,10 @@ class UserView(ModelView):
         if is_created:
             model.password = generate_password_hash(form.password.data)
         else:
-            model.new_password = generate_password_hash(form.new_password.data)
-            model.password = model.new_password
+            plainpwd = form.new_password.data.strip()
+            if plainpwd:
+                newpwd = generate_password_hash(form.new_password.data)
+                model.password = newpwd
 
     def is_accessible(self):
         return session.get('user') is not None

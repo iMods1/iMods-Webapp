@@ -79,6 +79,8 @@ CACHE_CONFIG = {
 TOKEN_TIMEOUT = 300
 
 DEB_UPLOAD_PATH = os.path.join(basedir, "deb")
+ALLOWED_EXTENSIONS = ["deb", "png", "jpg", "jpeg"]
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 
 CELERY_BROKER_URL = "amqp://imods:7ujm6yhn5tgb4rfv@localhost/imods"
 # pickle is not safe, json takes more memory but should be ok if we don't pass

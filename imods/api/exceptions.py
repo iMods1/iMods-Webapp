@@ -73,6 +73,11 @@ class BadJSONData(APIException):
     message = 'Json parse error: malformed data'
 
 
+class BadFormData(APIException):
+    status_code = 400
+    message = 'Form parse error: malformed data'
+
+
 class BadURLRequest(APIException):
     status_code = 400
     message = 'Bad URL Request, check parameters'
