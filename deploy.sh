@@ -94,7 +94,7 @@ main(){
             python -c 'from imods import app,db;from imods.db import add_defaults; add_defaults(app,db);print "ok"'
             ;;
         test)
-            python -m unittest discover -v tests
+            IMODS_TESTING=1 python -m unittest discover -v tests
             ;;
         *) usage;;
     esac

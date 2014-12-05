@@ -54,7 +54,10 @@ def init_cache():
         return
     app.cache = Cache(app, config=app.config['CACHE_CONFIG'])
 
+
 def init_s3():
+    if os.environ.get('IMODS_TESTING'):
+        return
     app.s3_conn = boto.connect_s3(profile_name=app.config["BOTO_PROFILE"])
     app.s3_assets_bucket = app.s3_conn.get_bucket(app.config["S3_ASSETS_BUCKET"])
     app.s3_pkg_bucket = app.s3_conn.get_bucket(app.config["S3_PKG_BUCKET"])

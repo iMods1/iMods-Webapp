@@ -1,22 +1,18 @@
 from flask import request, session, Blueprint, json, render_template
 from flask import url_for, abort
 from werkzeug import check_password_hash, generate_password_hash
-from imods import app
+from imods import app, db
 from imods.models.constants import BillingType, AccountStatus
 from imods.models import User, Order, Item, Device, Category, BillingInfo
 from imods.models import UserRole, OrderStatus, Review, WishList, Banner
 from imods.decorators import require_login, require_json
 from imods.decorators import require_privileges
-from imods.helpers import db_scoped_session, generate_onetime_token, check_onetime_token
-#from imods.helpers import detect_ios_by_useragent
-from imods.api.exceptions import setup_api_exceptions
-from imods.api.exceptions import UserAlreadRegistered, UserCredentialsDontMatch
-from imods.api.exceptions import ResourceIDNotFound, CategoryNotEmpty
-from imods.api.exceptions import InsufficientPrivileges, OrderNotChangable
-from imods.api.exceptions import CategorySelfParent, BadJSONData, BadURLRequest
-from imods.api.exceptions import CategoryNameReserved, InternalException
-from imods.api.exceptions import ResourceUniqueError, InvalidToken, CardCreationFailed
+from imods.helpers import db_scoped_session, generate_onetime_token
+from imods.helpers import generate_bucket_key, check_onetime_token
+from imods.tasks.dpkg import upload_to_s3
+from imods.api.exceptions import *
 from datetime import datetime
+from tempfile import mkstemp
 import boto
 import boto.ses
 import os
@@ -54,7 +50,28 @@ def user_profile():
     :jsonparam int age: age of the user, used for content access
     :jsonparam string author_identifier: identifier string for content authors
 
-    :queryparam string img: request profile image url
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
+    user = User.query.get(session['user']['uid'])
+    if not user:
+        raise ResourceIDNotFound()
+    return user.get_public()
+
+
+@api_mod.route("/user/profile_image")
+@require_login
+@require_json(request=False)
+def user_profile_image():
+    """
+    Get or set user profile image.
+
+    *** Request ***
+    :param binary image_file: image data
+
+    *** Response ***
     :jsonparam string profile_image_url: the url of user's profile image
 
     :resheader Content-Type: application/json
@@ -65,15 +82,63 @@ def user_profile():
     user = User.query.get(session['user']['uid'])
     if not user:
         raise ResourceIDNotFound()
-    if request.args.get('img'):
-        s3_key = app.s3_assets_bucket.get_key(user.profile_image_s3_keypath)
-        print(s3_key)
-        if s3_key:
-            url = s3_key.generate_url(app.config["DOWNLOAD_URL_EXPIRES_IN"])
-        else:
-            url = None
-        return dict(profile_image_url=url)
-    return user.get_public()
+    expire = app.config["DOWNLOAD_URL_EXPIRES_IN"]
+    s3_key = app.s3_assets_bucket.get_key(user.profile_image_s3_keypath)
+    if s3_key:
+        url = s3_key.generate_url(expire)
+    else:
+        url = None
+    res = dict(profile_image_url=url)
+    return res
+
+
+def allowed_file(filename):
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_EXTENSIONS"]
+
+
+@api_mod.route("/user/profile_image/upload", methods=["POST"])
+@require_login
+@require_json(request=False)
+def user_profile_image_upload():
+    """
+    Upload user's profile image, any existing one will be replaced.
+
+    *** Request ***
+
+    *** Response ***
+    :py:obj:`.success_response` if succeeded
+
+    :reqheader Content-Type: multipart/form-data
+    :resheader Content-Type: application/json
+    :status 200: no error :py:obj:`.success_response`
+    :status 404: :py:exc:`.ResourceIDNotFound`
+    :status 403: :py:exc:`.UserNotLoggedIn`
+    """
+    # FIXME: Add XSS protection
+    user = User.query.get(session['user']['uid'])
+    if not user:
+        raise ResourceIDNotFound()
+    imgfile = request.files.get("file")
+    if not imgfile:
+        raise BadFormData
+
+    if not allowed_file(imgfile.filename):
+        raise BadExtension
+
+    _, tmpfile = mkstemp()
+    imgfile.save(tmpfile)
+
+    s3_keypath = generate_bucket_key(app.config["S3_MEDIA_BASE_PATH"],
+                                     "profile_img_%s" % str(user.uid),
+                                     imgfile.filename)
+    user.profile_image_s3_keypath = s3_keypath
+    db.session.commit()
+    upload_to_s3(app.config["S3_ASSETS_BUCKET"],
+                 s3_keypath,
+                 tmpfile,
+                 True)
+    return success_response
 
 
 def send_confirmation_email(email):
@@ -1940,10 +2005,6 @@ def get_item_assets(item, res_type):
     if cached and res_type != "deb":
         return cached
 
-    # Connect to s3 buckets
-    s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
-    assets_bucket = s3.get_bucket(app.config["S3_ASSETS_BUCKET"])
-
     # Get paths
     assets_path = item.pkg_assets_path
 
@@ -1953,7 +2014,7 @@ def get_item_assets(item, res_type):
         # Get icons
         icons = []
         icons_path = os.path.join(assets_path, 'icons')
-        icons_list = assets_bucket.list(icons_path)
+        icons_list = app.s3_assets_bucket.list(icons_path)
         for icon in icons_list:
             if icon.name.endswith('/'):
                 # Skip subfolders
