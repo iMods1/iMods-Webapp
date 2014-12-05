@@ -115,6 +115,7 @@ def user_profile_image_upload():
     :status 404: :py:exc:`.ResourceIDNotFound`
     :status 403: :py:exc:`.UserNotLoggedIn`
     """
+    # FIXME: Add XSS protection
     user = User.query.get(session['user']['uid'])
     if not user:
         raise ResourceIDNotFound()
@@ -2004,10 +2005,6 @@ def get_item_assets(item, res_type):
     if cached and res_type != "deb":
         return cached
 
-    # Connect to s3 buckets
-    s3 = boto.connect_s3(profile_name=app.config.get("BOTO_PROFILE"))
-    assets_bucket = s3.get_bucket(app.config["S3_ASSETS_BUCKET"])
-
     # Get paths
     assets_path = item.pkg_assets_path
 
@@ -2017,7 +2014,7 @@ def get_item_assets(item, res_type):
         # Get icons
         icons = []
         icons_path = os.path.join(assets_path, 'icons')
-        icons_list = assets_bucket.list(icons_path)
+        icons_list = app.s3_assets_bucket.list(icons_path)
         for icon in icons_list:
             if icon.name.endswith('/'):
                 # Skip subfolders

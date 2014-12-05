@@ -5,6 +5,7 @@ from imods.helpers import db_scoped_session, generate_bucket_key, detect_tweak
 from imods.tasks.dpkg import dpkg_update_index, upload_to_s3
 from flask.ext.admin import Admin, expose, helpers, AdminIndexView, BaseView
 from flask.ext.admin.contrib.sqla import ModelView
+from flask.ext.admin.helpers import get_form_data
 from flask import session, redirect, url_for, request, flash
 from werkzeug import check_password_hash, generate_password_hash
 import wtforms as wtf
@@ -16,7 +17,12 @@ import os
 from tempfile import mkstemp
 import shutil
 import hashlib
-from .fields import S3ImageUploadField
+from .fields import S3ImageUploadField, S3DebFileUploadField
+from .fields import S3YouTubeVideoLinkUploadField, S3PKGAssetsImageUploadField
+from .fields import gen_app_icon_s3_keypath, gen_profile_img_s3_keypath
+from .fields import gen_youtublinkfile_s3_key_path
+from .fields import gen_screenshot_s3_keypath, gen_banner_s3_keypath
+from .validators import validate_imgfile, validate_debfile
 
 
 class UserView(ModelView):
@@ -46,21 +52,9 @@ class UserView(ModelView):
                                                     validators=validators)
         form_class.password = wtf.HiddenField()
 
-        form_class.profile_image_filename = wtf.HiddenField()
-
-        def validate_imgfile(self, field):
-            if field.data:
-                filename = field.data.name.lower()
-
-                ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
-                ext = filename.rsplit('.', 1)
-                if not ('.' in filename and ext in ALLOWED_EXTENSIONS):
-                    raise wtf.validators.ValidationError(
-                        'Wrong Filetype, you can upload only png,jpg,jpeg files')
-
         form_class.profile_image_s3_keypath = S3ImageUploadField(
             s3_bucket=app.config["S3_ASSETS_BUCKET"],
-            s3_keypath_gen=None,
+            s3_keypath_gen=gen_profile_img_s3_keypath,
             label=u'Profile image',
             base_path=app.config["S3_MEDIA_BASE_PATH"])
         return form_class
@@ -133,6 +127,71 @@ class ItemView(ModelView):
 
     def __init__(self, session, **kwargs):
         super(ItemView, self).__init__(Item, session, **kwargs)
+
+    def get_form(self):
+        form_class = super(ItemView, self).scaffold_form()
+
+        s3_bucket = app.config["S3_ASSETS_BUCKET"]
+
+        form_class.deb_file = S3DebFileUploadField(
+            label=u'Deb file',
+            validators=[validate_debfile, wtf.validators.Required()])
+
+        form_class.app_icon = S3PKGAssetsImageUploadField(
+            s3_bucket=s3_bucket,
+            s3_keypath_gen=gen_app_icon_s3_keypath,
+            s3_assets_dir="icons",
+            should_populate_obj=False,
+            auto_upload=True,
+            label=u'App Icon',
+            validators=[validate_imgfile])
+        form_class.screenshot = S3PKGAssetsImageUploadField(
+            s3_bucket=s3_bucket,
+            s3_keypath_gen=gen_screenshot_s3_keypath,
+            s3_assets_dir="screenshots",
+            should_populate_obj=False,
+            auto_upload=True,
+            label=u'Screenshot',
+            validators=[validate_imgfile])
+        form_class.banner_image = S3PKGAssetsImageUploadField(
+            s3_bucket=s3_bucket,
+            s3_keypath_gen=gen_banner_s3_keypath,
+            s3_assets_dir="banners",
+            should_populate_obj=False,
+            auto_upload=True,
+            label=u'Banner Image',
+            validators=[validate_imgfile])
+
+        form_class.video = S3YouTubeVideoLinkUploadField(
+            s3_bucket=s3_bucket,
+            s3_assets_dir="videos",
+            s3_keypath_gen=gen_youtublinkfile_s3_key_path,
+            label=u'YouTube Video ID')
+
+        return form_class
+
+    def edit_form(self, obj=None):
+        # Fill fields with data from obj
+        form = super(ItemView, self).edit_form(obj=obj)
+        form.deb_file.data = path.basename(obj.pkg_path)
+        form.app_icon.fill_with_obj(obj)
+        form.screenshot.fill_with_obj(obj)
+        form.banner_image.fill_with_obj(obj)
+        form.video.fill_with_obj(obj)
+        return form
+
+    def on_model_change(self, form, model, is_created):
+        # first, upload the deb
+        form.deb_file.populate_obj(model, "", True)
+        # Now pkg_assets_path is set
+        try:
+            form.app_icon.populate_obj(model, "", True)
+            form.screenshot.populate_obj(model, "", True)
+            form.banner_image.populate_obj(model, "", True)
+            form.video.populate_obj(model, "", True)
+        except TypeError as e:
+            print e
+            raise e
 
 
 class DeviceView(ModelView):
@@ -319,8 +378,8 @@ class PackageAssetsView(BaseView):
                         if t_item is None or t_item.iid == item.iid:
                             item.pkg_name = pkg_name
                         else:
-                            flash("Package name '%s' is used by another item(%d)."
-                                    % (pkg_name, t_item.iid))
+                            flash("Package name '%s' is used by another "
+                                  "item(%d)." % (pkg_name, t_item.iid))
                             s.rollback()
                             os.unlink(debTmpFile)
                             return redirect(url_for(".index"))
@@ -338,7 +397,6 @@ class PackageAssetsView(BaseView):
                         pkg_fullname,
                         package_file.filename)
                     item.pkg_path = pkg_s3_key_path
-
 
                     pkg_local_cache_path = path.join(
                         app.config["DEB_UPLOAD_PATH"],
@@ -455,4 +513,4 @@ imods_admin.add_view(ItemView(db.session))
 imods_admin.add_view(BannerView(db.session))
 imods_admin.add_view(OrderView(db.session))
 imods_admin.add_view(ReviewView(db.session))
-imods_admin.add_view(PackageAssetsView(name="Manage Assets"))
+# imods_admin.add_view(PackageAssetsView(name="Manage Assets"))
