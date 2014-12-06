@@ -145,6 +145,10 @@ def user_profile_image_upload():
 
 def send_confirmation_email(email):
     # TODO: Put email sending in background, e.g. using celery
+    if email:
+        email = email.lower()
+    else:
+        return
     token = generate_onetime_token(email, 'user_register_email_confirm')
     link_url = url_for('.user_confirm',
                        _external=True,
@@ -173,6 +177,10 @@ def send_confirmation_email(email):
 
 
 def send_reset_password_email(email):
+    if email:
+        email = email.lower()
+    else:
+        return
     token = generate_onetime_token(email, 'user_reset_password', 60*60*24)
     #query = urllib.urlencode([('email', email),
                               #('token', token)])
@@ -222,13 +230,14 @@ def user_send_confirmation():
     email = req.get('email')
     if email is None:
         raise BadJSONData
+    email = email.lower()
 
     with db_scoped_session() as se:
         user = se.query(User).filter_by(email=email).first()
         if not user:
             raise ResourceIDNotFound
     try:
-        send_confirmation_email(req.get('email'))
+        send_confirmation_email(email)
     except:
         raise
     return success_response
@@ -251,7 +260,7 @@ def user_confirm():
     :status 200: no error :py:obj:`.success_response`
     :status 401: failed to validate email.
     """
-    email = request.args.get('email')
+    email = request.args.get('email').lower()
     token = request.args.get('token')
     if check_onetime_token(email, token, 'user_register_email_confirm'):
         with db_scoped_session() as se:
@@ -290,6 +299,7 @@ def user_request_password():
     # TODO: Add access token to limit the API usage
     if not email:
         raise BadURLRequest
+    email = email.lower()
 
     with db_scoped_session() as se:
         user = se.query(User).filter_by(email=email).first()
@@ -323,6 +333,7 @@ def user_reset_password_client():
     # from iOS or desktop
     email = request.args.get("email").strip()
     token = request.args.get("token").strip()
+    email = email.lower()
     if len(email) == 0 or len(token) == 0:
         abort(404)
     return render_template("user/reset_password.html",
@@ -373,6 +384,8 @@ def user_reset_password():
     email = req.get('email')
     if not email:
         raise BadJSONData
+
+    email = email.lower()
 
     with db_scoped_session() as se:
         user = se.query(User).filter_by(email=email).first()
@@ -425,17 +438,20 @@ def user_register():
     :reqheader Content-Type: application/json
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exc:`.BadJSONData`
     :status 409: :py:exc:`.UserAlreadRegistered`
     """
     # TODO: Register device at user registeration
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
-    found = User.query.filter_by(email=req["email"]).first()
+    if not req.get('email'):
+        raise BadJSONData("email is missing")
+    found = User.query.filter_by(email=req["email"].lower()).first()
     if found:
         raise UserAlreadRegistered()
 
-    newuser = User(fullname=req["fullname"], email=req["email"],
+    newuser = User(fullname=req["fullname"], email=req["email"].lower(),
                    password=generate_password_hash(req["password"]),
                    private_key="privatekey", age=req["age"],
                    author_identifier="author_identifier")
@@ -469,16 +485,19 @@ def user_login():
     :reqheader Content-Type: application/json
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exc:`.BadJSONData`
     :status 401: :py:exc:`.UserCredentialsDontMatch`
     """
     # TODO: Check device and verify client.
     req = request.get_json()
     if type(req) is not dict:
         req = dict(json.loads(req))
-    user = User.query.filter_by(email=req["email"]).first()
+    if not req.get('email'):
+        raise BadJSONData('email is missing')
+    user = User.query.filter_by(email=req["email"].lower()).first()
     if user and check_password_hash(user.password, req["password"]):
         user_dict = {'uid': user.uid,
-                     'email': user.email,
+                     'email': user.email.lower(),
                      'fullname': user.fullname,
                      'age': user.age,
                      'author_identifier': user.author_identifier,
