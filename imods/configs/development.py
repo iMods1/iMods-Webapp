@@ -99,7 +99,6 @@ CSRF_SESSION_KEY = "somethingimpossibletoguess"
 
 BOTO_PROFILE = 'imods_testing'
 
-STRIPE_API_KEY = "sk_test_THSmIZgT2oLYqX56g3VeGOBd"
 S3_ASSETS_BUCKET = 'imods'
 S3_PKG_BUCKET = 'imods_package'
 S3_MEDIA_BASE_PATH = 'static/media'
@@ -108,3 +107,11 @@ PKG_INDEX_FILE_NAME = "Packages.gz"
 
 # Download links expires in 30 minutes
 DOWNLOAD_URL_EXPIRES_IN = 30*60
+
+# Payment gayways
+STRIPE_API_KEY = "sk_test_THSmIZgT2oLYqX56g3VeGOBd"
+PAYPAL_CONFIG = {
+    'mode': 'sandbox',
+    'client_id': 'AYIxPRAn9AN93GvsRpCpEWwvoRtltxlexuAThDlk5br4ElJDHdY9sHt-YZU8',
+    'client_secret': 'EMVg1xBD2zjRGwahmmchvUri1sZGJpnFAPDvX5Mg2No8i_uKEeveZ5hufFqK'
+}

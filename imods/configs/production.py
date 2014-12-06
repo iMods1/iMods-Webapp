@@ -111,4 +111,10 @@ PKG_INDEX_FILE_NAME = "Packages.gz"
 # Download links expires in 30 minutes
 DOWNLOAD_URL_EXPIRES_IN = 30*60
 
+# Payment gateways
 STRIPE_API_KEY = "sk_test_THSmIZgT2oLYqX56g3VeGOBd"
+PAYPAL_CONFIG = { # TODO: Switch to production mode.
+    'mode': 'sandbox',
+    'client_id': 'AYIxPRAn9AN93GvsRpCpEWwvoRtltxlexuAThDlk5br4ElJDHdY9sHt-YZU8',
+    'client_secret': 'EMVg1xBD2zjRGwahmmchvUri1sZGJpnFAPDvX5Mg2No8i_uKEeveZ5hufFqK'
+}

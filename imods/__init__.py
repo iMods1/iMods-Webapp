@@ -4,6 +4,7 @@
 from flask import Flask
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.cache import Cache
+import paypalrestsdk
 import boto
 import os
 
@@ -63,6 +64,10 @@ def init_s3():
     app.s3_pkg_bucket = app.s3_conn.get_bucket(app.config["S3_PKG_BUCKET"])
 
 
+def init_paypal():
+    app.paypal = paypalrestsdk.configure(app.config["PAYPAL_CONFIG"])
+
+
 from imods.api.routes import api_mod
 from imods.admin.views import imods_admin
 app.register_blueprint(api_mod)
@@ -72,3 +77,4 @@ init_db()
 init_folders()
 init_cache()
 init_s3()
+init_paypal()

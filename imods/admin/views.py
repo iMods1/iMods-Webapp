@@ -26,8 +26,10 @@ from .validators import validate_imgfile, validate_debfile
 
 
 class UserView(ModelView):
+    column_exclude_list = ('stripe_customer_token', 'password')
     form_overrides = dict(role=wtf.SelectField,
-                          password=wtf.PasswordField)
+                          password=wtf.PasswordField,
+                          stripe_customer_token=wtf.HiddenField)
     form_args = dict(
         role=dict(
             choices=[(UserRole.Admin, "Admin"),
@@ -76,7 +78,9 @@ class UserView(ModelView):
 
 
 class BillingView(ModelView):
-    form_overrides = dict(type_=wtf.SelectField)
+    form_overrides = dict(type_=wtf.SelectField,
+                          paypal_refresh_token=wtf.HiddenField,
+                          stripe_card_token=wtf.HiddenField)
     form_args = dict(
         type_=dict(
             choices=[(BillingType.creditcard, "Credit Card"),
@@ -84,6 +88,9 @@ class BillingView(ModelView):
                      ],
             label="Payment type"
         ))
+
+    column_exclude_list = ('stripe_card_token', 'paypal_refresh_token',
+                           'cc_no', 'cc_name', 'cc_expr')
 
     def is_accessible(self):
         return session.get('user') is not None
@@ -121,6 +128,22 @@ class CategoryView(ModelView):
 
 
 class ItemView(ModelView):
+
+    def truncate_formatter(max_len, n):
+        def fmt(v, c, m, p):
+            t = getattr(m, n)
+            if t:
+                res = t[:max_len] + (t[max_len:] and '..')
+            else:
+                res = ''
+            return res
+        return fmt
+
+    column_exclude_list = ('control', 'pkg_path', 'pkg_assets_path',
+                           'pkg_signature', 'pkg_dependencies')
+
+    column_formatters = dict(description=truncate_formatter(15, 'description'),
+                             summary=truncate_formatter(15, 'summary'))
 
     def is_accessible(self):
         return session.get('user') is not None

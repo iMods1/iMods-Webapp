@@ -85,7 +85,7 @@ class BadURLRequest(APIException):
 
 class UserNotFound(APIException):
     status_code = 404
-    message = 'Internal Error'
+    message = 'User not found'
 
 
 class ResourceIDNotFound(APIException):
@@ -123,3 +123,8 @@ class OrderNotChangable(APIException):
 class CategorySelfParent(APIException):
     status_code = 409
     message = "Category's parent cannot be itself."
+
+
+class PaymentAuthorizationFailed(APIException):
+    status_code = 417
+    message = "Payment gateway has refused to authorize the payment."
