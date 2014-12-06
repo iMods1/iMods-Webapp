@@ -351,7 +351,6 @@ class S3YouTubeVideoLinkUploadField(wtf.TextField):
     def process(self, formdata, data=unset_value):
         if formdata:
             marker = '_%s-delete' % self.name
-            print marker
             if marker in formdata:
                 self._should_delete = True
 

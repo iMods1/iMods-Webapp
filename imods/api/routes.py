@@ -11,6 +11,8 @@ from imods.helpers import db_scoped_session, generate_onetime_token
 from imods.helpers import generate_bucket_key, check_onetime_token
 from imods.tasks.dpkg import upload_to_s3
 from imods.api.exceptions import *
+import stripe
+import paypalrestsdk
 from datetime import datetime
 from tempfile import mkstemp
 import boto
@@ -912,6 +914,7 @@ def billing_add():
     :jsonparam string cc_no: credit card number, `optional`
     :jsonparam string cc_name: name on the credit card, `optional`
     :jsonparam string cc_expr: expiration date of the credit card, `optional`
+    :jsonparam string pp_auth_code: paypal authorization code
 
     `cc_expr` must be in 'mm/yy' format.
 
@@ -927,33 +930,60 @@ def billing_add():
     if type(req) is not dict:
         req = dict(json.loads(req))
     uid = session['user']['uid']
-    if req.get('cc_expr'):
-        cc_expr = datetime.strptime(req['cc_expr'], '%m/%y')
-    else:
-        cc_expr = None
-    # TODO: Verify creditcard info before add it to database
-    cc_cvv = req.get('cc_cvv')
-    if cc_cvv:
-        del req['cc_cvv']
-    billing = BillingInfo(uid=uid,
-                          address=req['address'],
-                          zipcode=req['zipcode'],
-                          state=req['state'],
-                          city=req['city'],
-                          country=req['country'],
-                          type_=req['type_'],
-                          cc_no=req.get('cc_no'),
-                          cc_name=req.get('cc_name'),
-                          cc_expr=cc_expr)
-    with db_scoped_session() as se:
-        se.add(billing)
+    if req.get('type_') == BillingType.creditcard:
+        if req.get('cc_expr'):
+            cc_expr = datetime.strptime(req['cc_expr'], '%m/%y')
+        else:
+            cc_expr = None
+        # TODO: Verify creditcard info before add it to database
+        cc_cvv = req.get('cc_cvv')
+        if cc_cvv:
+            del req['cc_cvv']
+        billing = BillingInfo(uid=uid,
+                            address=req['address'],
+                            zipcode=req['zipcode'],
+                            state=req['state'],
+                            city=req['city'],
+                            country=req['country'],
+                            type_=req['type_'],
+                            cc_no=req.get('cc_no'),
+                            cc_name=req.get('cc_name'),
+                            cc_expr=cc_expr)
+        with db_scoped_session() as se:
+            se.add(billing)
+            try:
+                billing.get_or_create_stripe_card_obj(cc_cvv)
+                se.commit()
+            except Exception as e:
+                se.rollback()
+                raise CardCreationFailed(str(e))
+            return billing.get_public()
+    elif req.get('type_') == BillingType.paypal:
+        if not req.get('pp_auth_code'):
+            raise BadJSONData('Payment type is paypal but no authorization '
+                              'code is received.')
+        auth_code = req.get('pp_auth_code')
         try:
-            billing.get_or_create_stripe_card_obj(cc_cvv)
-            se.commit()
-        except Exception as e:
-            se.rollback()
-            raise CardCreationFailed(str(e))
-        return billing.get_public()
+            refresh_token = app.paypal.get_refresh_token(auth_code)
+        except:
+            raise InvalidToken('Failed to get Paypal token, check the authorization code.')
+        billing = BillingInfo(uid=uid,
+                              address=req['address'],
+                              zipcode=req['zipcode'],
+                              state=req['state'],
+                              city=req['city'],
+                              country=req['country'],
+                              type_=req['type_'],
+                              paypal_refresh_token=refresh_token)
+        with db_scoped_session() as se:
+            try:
+                se.add(billing)
+                se.commit()
+            except Exception as e:
+                se.rollback()
+                print e
+                raise InternalException(e.message)
+            return billing.get_public()
 
 
 @api_mod.route("/billing/update/<int:bid>", methods=["POST"])
@@ -1260,6 +1290,7 @@ def order_add():
     :jsonparam string currency: `optional`, currency of the payment
     :jsonparam float total_price: total price of the items
     :jsonparam float total_charged: total charged, including tax and other fees
+    :jsonparam dict client_metadata_id: clientMetadata-Id for paypal payments
 
     *** Response ***
 
@@ -1279,12 +1310,12 @@ def order_add():
     :reqheader Content-Type: application/json
     :resheader Content-Type: application/json
     :status 200: no error :py:obj:`.success_response`
+    :status 400: :py:exc:`.BadJSONData`
     :status 403: :py:exc:`.UserNotLoggedIn`
     :status 404: :py:exc:`.ResourceIDNotFound`
     :status 405: :py:exc:`.InsufficientPrivileges`
+    :status 417: :py:exc:`.PaymentAuthorizationFailed`
     """
-    from imods import app
-    import stripe
     stripe.api_key = app.config.get("STRIPE_API_KEY")
     req = request.get_json()
     if type(req) is not dict:
@@ -1310,7 +1341,6 @@ def order_add():
                       quantity=quantity, currency=currency,
                       total_price=total_charge,
                       total_charged=total_charge)
-        # TODO: Calculate total and return back to client.
     except:
         raise
     with db_scoped_session() as se:
@@ -1328,6 +1358,39 @@ def order_add():
                         card=card.id,
                         description="imods order#{0}".format(order.oid)
                     )
+            elif billing_info and billing_info.type_ == BillingType.paypal:
+                client_metadata_id = req.get('client_metadata_id')
+                if not billing_info.paypal_refresh_token:
+                    raise InvalidToken("The billing method doesn't have a valid"
+                                       " paypal refresh token.")
+                if not client_metadata_id:
+                    raise BadJSONData("client_metadata_id is needed for "
+                                      "paypal transactions.")
+                user = User.query.get(uid)
+                if not user:
+                    raise UserNotFound
+                # Create payment
+                payment_dict = {
+                    "intent": "authorize",
+                    "payer": {
+                        "payment_method": "paypal",
+                    },
+                    "transactions": [{
+                        "amount": {
+                            "total": str(order.total_price),
+                            "currency": order.currency.upper(),
+                        },
+                        "description": "iMods order {0}: {1}".format(
+                                        order.oid, item.display_name)
+                        }]
+                }
+                payment = paypalrestsdk.Payment(payment_dict)
+                if not payment.create(billing_info.paypal_refresh_token, client_metadata_id):
+                    raise PaymentAuthorizationFailed("Unable to create payment")
+                if payment['intent'] != 'authorize':
+                    raise PaymentAuthorizationFailed
+            elif billing_info:
+                raise BadJSONData("Unsupported payment type.")
 
             # Check whether if it's a free item
             if not billing_info and item.price > 0:
@@ -2030,7 +2093,7 @@ def get_item_assets(item, res_type):
         # Get screenshots
         screenshots = []
         screenshots_path = os.path.join(assets_path, 'screenshots')
-        ss_list = assets_bucket.list(screenshots_path)
+        ss_list = app.s3_assets_bucket.list(screenshots_path)
         for sshot in ss_list:
             if sshot.name.endswith('/'):
                 continue
@@ -2044,7 +2107,7 @@ def get_item_assets(item, res_type):
         # Get videos
         videos = []
         videos_path = os.path.join(assets_path, "videos")
-        videos_list = assets_bucket.list(videos_path)
+        videos_list = app.s3_assets_bucket.list(videos_path)
         for video in videos_list:
             if video.name.endswith('/'):
                 continue
@@ -2061,7 +2124,7 @@ def get_item_assets(item, res_type):
         # Get banner images
         banners = []
         banner_img_path = os.path.join(assets_path, "banners")
-        banner_imgs = assets_bucket.list(banner_img_path)
+        banner_imgs = app.s3_assets_bucket.list(banner_img_path)
         for banner in banner_imgs:
             if banner.name.endswith('/'):
                 continue
@@ -2072,7 +2135,7 @@ def get_item_assets(item, res_type):
         result = banners
 
     if res_type == "deb":
-        pkg_bucket = s3.get_bucket(app.config["S3_PKG_BUCKET"])
+        pkg_bucket = app.s3_pkg_bucket(app.config["S3_PKG_BUCKET"])
         deb_key = pkg_bucket.get_key(item.pkg_path)
         deb_url = deb_key.generate_url(expires_in=expire)
         deb = dict(deb_url=deb_url, deb_sha1_checksum=item.pkg_signature)
