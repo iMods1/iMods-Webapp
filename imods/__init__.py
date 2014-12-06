@@ -65,6 +65,8 @@ def init_s3():
 
 
 def init_paypal():
+    if os.environ.get('IMODS_TESTING'):
+        return
     app.paypal = paypalrestsdk.configure(app.config["PAYPAL_CONFIG"])
 
 
