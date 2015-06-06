@@ -33,7 +33,13 @@
             {% endif %}
             </div>
             {% endfor %}
-            <button class="btn" type="submit">Submit</button>
+            {% if request.path == "/admin/login" %}
+            <a href="register" class="btn" type="button">Register</a>
+            <button class="btn" type="submit">Login</button>
+            {% endif %}
+            {% if request.path == "/admin/register" %}
+            <button class="btn" type="submit">Register</button>
+            {% endif %}
         </form>
         {{ link | safe }}
         {% endif %}

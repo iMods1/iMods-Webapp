@@ -34,6 +34,7 @@ class UserView(ModelView):
         role=dict(
             choices=[(UserRole.Admin, "Admin"),
                      (UserRole.SiteAdmin, "SiteAdmin"),
+                     (UserRole.AppDev, "AppDev"),
                      (UserRole.User, "User")
                      ],
             coerce=int
@@ -255,7 +256,7 @@ class LoginForm(wtf.form.Form):
         if not check_password_hash(user.password, self.password.data):
             raise wtf.validators.ValidationError("Invalid password")
 
-        if user.role != UserRole.SiteAdmin:
+        if (user.role != UserRole.SiteAdmin and user.role != UserRole.AppDev):
             raise wtf.validators.ValidationError(
                 "You don't have the required permission to access this page.")
 
@@ -269,13 +270,25 @@ class LoginForm(wtf.form.Form):
     def get_user(self):
         return User.query.filter_by(email=self.email.data).first()
 
+class RegisterForm(wtf.form.Form):
+    email = wtf.fields.TextField(validators=[wtf.validators.required(), wtf.validators.Email()])
+    password = wtf.fields.PasswordField(validators=[wtf.validators.required(), wtf.validators.EqualTo('confirm_password', message='Passwords must match')])
+    confirm_password = wtf.fields.PasswordField(validators=[wtf.validators.required()])
+    full_name = wtf.fields.TextField(validators=[wtf.validators.required()])
+    age = wtf.fields.IntegerField()
+    author_identifier = wtf.fields.TextField()
+    status = wtf.fields.IntegerField(validators=[wtf.validators.required()])
+    private_key = wtf.fields.TextField(validators=[wtf.validators.required()])
+
+    def get_user(self):
+        return User.query.filter_by(email=self.email.data).first()
 
 class iModsAdminIndexView(AdminIndexView):
     @expose('/')
     def index(self):
         if not session.get('user'):
             return redirect(url_for('.login_view'))
-        elif session['user']['role'] != UserRole.SiteAdmin:
+        elif session['user']['role'] != UserRole.SiteAdmin and session['user']['role'] != UserRole.AppDev:
             del session['user']
         return redirect(url_for(".login_view"))
 
@@ -286,7 +299,7 @@ class iModsAdminIndexView(AdminIndexView):
         if helpers.validate_form_on_submit(form):
             user = form.get_user()
 
-        if user and user.role == UserRole.SiteAdmin:
+        if user and (user.role == UserRole.SiteAdmin or user.role == UserRole.AppDev):
             return redirect(url_for('.index'))
 
         self._template_args['form'] = form
@@ -298,6 +311,43 @@ class iModsAdminIndexView(AdminIndexView):
             del session['user']
         return redirect(url_for(".index"))
 
+    @expose('/register', methods=["GET", "POST"])
+    def register_view(self):
+        form = RegisterForm(request.form)
+        user = None
+        if helpers.validate_form_on_submit(form):
+            with db_scoped_session() as s:
+                try:
+                    new_user = User()
+                    new_user.email = form.email.data
+                    new_user.password = generate_password_hash(form.password.data)
+                    new_user.fullname = form.full_name.data
+                    new_user.age = form.age.data
+                    new_user.author_identifier = form.author_identifier.data
+                    new_user.status = form.status.data
+                    new_user.private_key = form.private_key.data
+                    # Only AppDev users register from this page
+                    new_user.role = UserRole.AppDev
+                    s.add(new_user)
+                    user_session_dict = {
+                        'fullname': new_user.fullname,
+                        'email': new_user.email,
+                        'role': new_user.role
+                    }
+                    session['user'] = user_session_dict
+                    user = form.get_user()
+                except Exception as e:
+                    s.rollback()
+                    raise e
+
+                # Commit changes
+                s.commit()
+
+        if user and (user.role == UserRole.SiteAdmin or user.role == UserRole.AppDev):
+            return redirect(url_for('.index'))
+
+        self._template_args['form'] = form
+        return super(iModsAdminIndexView, self).index()
 
 class PackageAssetsUploadForm(ExtForm):
     item_id = wtf.fields.SelectField(u"Item", coerce=int)
