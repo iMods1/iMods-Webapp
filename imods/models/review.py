@@ -21,5 +21,11 @@ class Review(db.Model, JSONSerialize):
     item = db.relationship("Item", back_populates="reviews")
 
     def __repr__(self):
-        return "<Review of item '%r' rating %r>" % (self.item.pkg_name,
-                                                    self.rating)
+        package_name = 'none'
+        rating = 'none'
+        if self != None and self.item != None and self.item.pkg_name != None:
+                package_name = self.item.pkg_name
+        if self != None and self.rating != None:
+                rating = self.rating
+        return "<Review of item '%r' rating %r>" % (package_name,
+                                                    rating)
