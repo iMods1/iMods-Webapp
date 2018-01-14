@@ -1,3 +1,4 @@
+![iMods Banner](https://raw.githubusercontent.com/iMods1/iMods/master/repo_banner.png)
 Build status
 ===
 Master branch:
