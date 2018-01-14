@@ -1,0 +1,10 @@
+.*
+bin/*
+lib/*
+include/*
+local/*
+*.db
+*.swp
+*~
+*.pyc
+*.tmp

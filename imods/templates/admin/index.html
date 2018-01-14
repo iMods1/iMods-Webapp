@@ -1,0 +1,50 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+{{ super() }}
+<div class="row-fluid">
+
+    <div>
+        {% if session.get('user') %}
+        <h1>iMods server administration</h1>
+        <p class="lead">
+            // Add dashboard
+        </p>
+        {% else %}
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <ul classes="flashes">
+                {% for message in messages %}
+                <li>{{message}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        {% endwith %}
+        <form method="POST" action="">
+            {% for f in form if f.type != 'CSRFTokenField' %}
+            <div>
+            {{ f.label }}
+            {{ f }}
+            {% if f.errors %}
+            <ul>
+                {% for e in f.errors %}
+                <li>{{ e }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            </div>
+            {% endfor %}
+            {% if request.path == "/admin/login" %}
+            <a href="register" class="btn" type="button">Register</a>
+            <button class="btn" type="submit">Login</button>
+            {% endif %}
+            {% if request.path == "/admin/register" %}
+            <button class="btn" type="submit">Register</button>
+            {% endif %}
+        </form>
+        {{ link | safe }}
+        {% endif %}
+    </div>
+
+    <!--<a class="btn btn-primary" href="/"><i class="icon-arrow-left icon-white"></i> Back</a>-->
+</div>
+{% endblock body %}

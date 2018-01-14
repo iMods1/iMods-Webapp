@@ -1,0 +1,96 @@
+box: ofan/libapt-pkg-box@0.1.0
+build:
+    steps:
+        - virtualenv:
+            name: setup virtual environment
+            install_wheel: true
+        - pip-install
+        - script:
+            name: install extra dependencies
+            code: |
+                cd extra_dep
+                tar xvf python-apt_0.9.3.5.tar.xz
+                cd python-apt-0.9.3.5/
+                python setup.py install
+        - script:
+            name: echo python information
+            code: |
+                echo "python version $(python --version) running"
+                echo "pip version $(pip --version) running"
+                pip freeze
+                echo -e "sys.path: \n$(python -c 'import sys; print sys.path')"
+        - script:
+            name: running tests
+            code: |
+                ./deploy.sh test
+
+deploy:
+    steps:
+        - add-to-known_hosts:
+            hostname: imods.wunderkind.us
+            fingerprint: d0:28:e7:cf:ac:2c:a7:d8:b2:25:03:cb:be:5b:65:da
+
+        - mktemp:
+            name: creating temporary private key
+            envvar: PRIVATEKEY_PATH
+
+        - mktemp:
+            name: creating temporary ssh config
+            envvar: SSH_CONFIG_PATH
+
+        - mktemp:
+            name: creating package file
+            envvar: PACKAGE_PATH
+
+        - create-file:
+            name: write private key
+            filename: $PRIVATEKEY_PATH
+            content: $DEPLOY_SSH_PRIVATE
+            overwrite: true
+            hide-from-log: true
+
+        - create-file:
+            name: create temporary ssh config
+            filename: $SSH_CONFIG_PATH
+            content: $SSH_CONFIG_CONTENT
+            overwrite: true
+            hide-from-log: true
+
+        - script:
+            name: packaging application
+            code: |
+                ./deploy.sh package $PACKAGE_PATH
+
+        - script:
+            name: transfer application
+            code: |
+                echo PWD=$PWD
+                ############################################
+                ls -al
+                ############################################
+                chmod 600 $PRIVATEKEY_PATH
+                scp -vvv -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH -o UserKnownHostsFile=no $PACKAGE_PATH $SSH_HOSTNAME:~/
+
+        - script:
+            name: stopping application
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'supervisorctl stop imods:*'
+
+        - script:
+            name: cleanning remote environment
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'rm -rf ~/app/*'
+
+        - script:
+            name: unpacking application
+            code: |
+                ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "mkdir ~/app; tar zxv -C ~/app -f ~/`basename $PACKAGE_PATH`"
+        - script:
+            name: deploying application on remote host
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "cd ~/app; DEPLOY=true ./deploy.sh init"
+
+        - script:
+            name: starting application
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME "supervisorctl start imods:*"
+
+        - script:
+            name: clean builds
+            code: ssh -i $PRIVATEKEY_PATH -F $SSH_CONFIG_PATH $SSH_HOSTNAME 'rm -rf ~/tmp*'
