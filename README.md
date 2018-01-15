@@ -1,3 +1,5 @@
+This is the api that backs the iMods iOS app.
+
 ![iMods Banner](https://raw.githubusercontent.com/iMods1/iMods/master/repo_banner.png)
 Build status
 ===
